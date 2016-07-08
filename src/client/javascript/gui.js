@@ -27,12 +27,20 @@
  * @author  Anders Evenrud <andersevenrud@gmail.com>
  * @licence Simplified BSD License
  */
-(function(API, Utils, VFS) {
+(function(API, Utils, VFS, GUI) {
   'use strict';
 
-  window.OSjs = window.OSjs || {};
-  OSjs.GUI = OSjs.GUI || {};
-  OSjs.GUI.Elements = OSjs.GUI.Elements || {};
+  GUI.Helpers = GUI.Helpers || {};
+
+  /**
+   * @namespace GUI
+   * @memberof OSjs
+   */
+
+  /**
+   * @namespace Helpers
+   * @memberof OSjs.GUI
+   */
 
   /////////////////////////////////////////////////////////////////////////////
   // HELPERS
@@ -41,13 +49,14 @@
   /**
    * Gets window id from upper parent element
    *
-   * @param   DOMElement      el      Child element (can be anything)
+   * @function getWindowId
+   * @memberof OSjs.GUI.Helpers
    *
-   * @return  int
+   * @param   {Node}      el      Child element (can be anything)
    *
-   * @api OSjs.GUI.Helpers.getWindowId()
+   * @return  {Number}
    */
-  function getWindowId(el) {
+  GUI.Helpers.getWindowId = function getWindowId(el) {
     while ( el.parentNode ) {
       var attr = el.getAttribute('data-window-id');
       if ( attr !== null ) {
@@ -56,32 +65,34 @@
       el = el.parentNode;
     }
     return null;
-  }
+  };
 
   /**
    * Gets "label" from a node
    *
-   * @param   DOMElement      el      The element
+   * @function getLabel
+   * @memberof OSjs.GUI.Helpers
    *
-   * @return  String
+   * @param   {Node}      el      The element
    *
-   * @api OSjs.GUI.Helpers.getLabel()
+   * @return  {String}
    */
-  function getLabel(el) {
+  GUI.Helpers.getLabel = function getLabel(el) {
     var label = el.getAttribute('data-label');
     return label || '';
-  }
+  };
 
   /**
    * Gets "label" from a node (Where it can be innerHTML and parameter)
    *
-   * @param   DOMElement      el      The element
+   * @function getValueLabel
+   * @memberof OSjs.GUI.Helpers
    *
-   * @return  String
+   * @param   {Node}      el      The element
    *
-   * @api OSjs.GUI.Helpers.getValueLabel()
+   * @return  {String}
    */
-  function getValueLabel(el, attr) {
+  GUI.Helpers.getValueLabel = function getValueLabel(el, attr) {
     var label = attr ? el.getAttribute('data-label') : null;
 
     if ( el.childNodes.length && el.childNodes[0].nodeType === 3 && el.childNodes[0].nodeValue ) {
@@ -90,18 +101,19 @@
     }
 
     return label || '';
-  }
+  };
 
   /**
    * Gets "value" from a node
    *
-   * @param   DOMElement      el       The element
+   * @function getViewNodeValue
+   * @memberof OSjs.GUI.Helpers
    *
-   * @return  String
+   * @param   {Node}      el       The element
    *
-   * @api OSjs.GUI.Helpers.getViewNodeValue()
+   * @return  {String}
    */
-  function getViewNodeValue(el) {
+  GUI.Helpers.getViewNodeValue = function getViewNodeValue(el) {
     var value = el.getAttribute('data-value');
     if ( typeof value === 'string' && value.match(/^\[|\{/) ) {
       try {
@@ -111,19 +123,20 @@
       }
     }
     return value;
-  }
+  };
 
   /**
    * Internal for getting
    *
-   * @param   DOMElement          el      Element
-   * @param   OSjs.Core.Window    win     (optional) Window Reference
+   * @function getIcon
+   * @memberof OSjs.GUI.Helpers
    *
-   * @return  String
+   * @param   {Node}                el      Element
+   * @param   {OSjs.Core.Window}    [win]   Window Reference
    *
-   * @api OSjs.GUI.Helpers.getIcon()
+   * @return  {String}
    */
-  function getIcon(el, win) {
+  GUI.Helpers.getIcon = function getIcon(el, win) {
     var image = el.getAttribute('data-icon');
 
     if ( image && image !== 'undefined') {
@@ -150,20 +163,21 @@
     }
 
     return null;
-  }
+  };
 
   /**
    * Wrapper for getting custom dom element property value
    *
-   * @param   DOMElement      el      Element
-   * @param   String          param   Parameter name
-   * @param   String          tagName (Optional) What tagname is in use? Automatic
+   * @function getProperty
+   * @memberof OSjs.GUI.Helpers
    *
-   * @api OSjs.GUI.Helpers.getProperty()
+   * @param   {Node}     el          Element
+   * @param   {String}   param       Parameter name
+   * @param   {String}   [tagName]   What tagname is in use? Automatic
    *
-   * @return  Mixed
+   * @return  {Mixed}
    */
-  function getProperty(el, param, tagName) {
+  GUI.Helpers.getProperty = function getProperty(el, param, tagName) {
     tagName = tagName || el.tagName.toLowerCase();
     var isDataView = tagName.match(/^gui\-(tree|icon|list|file)\-view$/);
 
@@ -179,51 +193,61 @@
     }
 
     if ( (param === 'value' || param === 'selected') && isDataView ) {
-      return OSjs.GUI.Elements[tagName].values(el);
+      return GUI.Elements[tagName].values(el);
     }
 
     return el.getAttribute('data-' + param);
-  }
+  };
 
   /**
    * Wrapper for setting custom dom element property value
    *
-   * @param   DOMElement      el      Element
-   * @param   String          param   Parameter name
-   * @param   Mixed           value   Parameter value
-   * @param   String          tagName (Optional) What tagname is in use? Automatic
+   * @function setProperty
+   * @memberof OSjs.GUI.Helpers
    *
-   * @api OSjs.GUI.Helpers.setProperty()
-   *
-   * @return  void
+   * @param   {Node}            el            Element
+   * @param   {String}          param         Parameter name
+   * @param   {Mixed}           value         Parameter value
+   * @param   {String}          [tagName]     What tagname is in use? Automatic
    */
-  function setProperty(el, param, value, tagName) {
+  GUI.Helpers.setProperty = function setProperty(el, param, value, tagName) {
     tagName = tagName || el.tagName.toLowerCase();
 
     function _setInputProperty() {
       var firstChild = el.querySelector('textarea, input, select, button');
 
-      if ( param === 'value' ) {
-        if ( tagName === 'gui-radio' || tagName === 'gui-checkbox' ) {
-          if ( value ) {
-            firstChild.setAttribute('checked', 'checked');
-          } else {
-            firstChild.removeAttribute('checked');
+      var inpMap = {
+        value: function() {
+          if ( tagName === 'gui-radio' || tagName === 'gui-checkbox' ) {
+            if ( value ) {
+              firstChild.setAttribute('checked', 'checked');
+              firstChild.checked = true;
+            } else {
+              firstChild.removeAttribute('checked');
+              firstChild.checked = false;
+            }
           }
+          firstChild.value = value;
+        },
+
+        disabled: function() {
+          if ( value ) {
+            firstChild.setAttribute('disabled', 'disabled');
+          } else {
+            firstChild.removeAttribute('disabled');
+          }
+          el.setAttribute('aria-disabled', String(value === true));
+        }
+      };
+
+      if ( firstChild ) {
+        if ( inpMap[param] ) {
+          inpMap[param]();
+          return;
         }
 
-        firstChild.value = value;
-        return;
-      } else if ( param === 'disabled' ) {
-        if ( value ) {
-          firstChild.setAttribute('disabled', 'disabled');
-        } else {
-          firstChild.removeAttribute('disabled');
-        }
-        return;
+        firstChild.setAttribute(param, value || '');
       }
-
-      firstChild.setAttribute(param, value || '');
     }
 
     function _setElementProperty() {
@@ -242,7 +266,7 @@
         var firstChild = el.querySelector('textarea, input, select');
         el.appendChild(firstChild);
         Utils.$remove(el.querySelector('label'));
-        createInputLabel(el, tagName.replace(/^gui\-/, ''), firstChild, value);
+        GUI.Helpers.createInputLabel(el, tagName.replace(/^gui\-/, ''), firstChild, value);
       }
     }
 
@@ -270,22 +294,21 @@
     if ( param !== 'value' ) {
       _setElementProperty();
     }
-  }
+  };
 
   /**
    * Creates a label for given input element
    *
-   * @param   DOMEelement     el        Element root
-   * @param   String          type      Input element type
-   * @param   DOMElement      input     The input element
-   * @param   String          label     (Optional) Used when updating
+   * @function createInputLabel
+   * @memberof OSjs.GUI.Helpers
    *
-   * @return  void
-   *
-   * @api OSjs.GUI.Helpers.createInputLabel()
+   * @param   {Node}            el        Element root
+   * @param   {String}          type      Input element type
+   * @param   {Node}            input     The input element
+   * @param   {String}          [label]   Used when updating
    */
-  function createInputLabel(el, type, input, label) {
-    label = label || getLabel(el);
+  GUI.Helpers.createInputLabel = function createInputLabel(el, type, input, label) {
+    label = label || GUI.Helpers.getLabel(el);
 
     if ( label ) {
       var lbl = document.createElement('label');
@@ -303,18 +326,21 @@
     } else {
       el.appendChild(input);
     }
-  }
+  };
 
   /**
    * Create a new custom DOM element
    *
-   * @param   String      tagName           Tag Name
-   * @param   Object      params            Dict with data-* properties
-   * @param   Array       ignoreParams      (optional) list of arguments to ignore
+   * @function createElement
+   * @memberof OSjs.GUI.Helpers
    *
-   * @return  DOMElement
+   * @param   {String}      tagName           Tag Name
+   * @param   {Object}      params            Dict with data-* properties
+   * @param   {Array}       [ignoreParams]    List of arguments to ignore
+   *
+   * @return {Node}
    */
-  function createElement(tagName, params, ignoreParams) {
+  GUI.Helpers.createElement = function createElement(tagName, params, ignoreParams) {
     ignoreParams = ignoreParams || [];
 
     var el = document.createElement(tagName);
@@ -360,20 +386,21 @@
     }
 
     return el;
-  }
+  };
 
   /**
    * Sets the flexbox CSS style properties for given container
    *
-   * @param   DOMElement      el              The container
-   * @param   int             grow            Grow factor
-   * @param   int             shrink          Shrink factor
-   * @param   String          basis           (Optional: basis, default=auto)
-   * @param   DOMElement      checkel         (Optional: take defaults from this node)
+   * @function setFlexbox
+   * @memberof OSjs.GUI.Helpers
    *
-   * @api OSjs.GUI.Helpers.setFlexbox()
+   * @param   {Node}            el              The container
+   * @param   {Number}          grow            Grow factor
+   * @param   {Number}          shrink          Shrink factor
+   * @param   {String}          [basis=auto]    Basis
+   * @param   {Node}            [checkel]       Take defaults from this node
    */
-  function setFlexbox(el, grow, shrink, basis, checkel) {
+  GUI.Helpers.setFlexbox = function setFlexbox(el, grow, shrink, basis, checkel) {
     checkel = checkel || el;
     (function() {
       if ( typeof basis === 'undefined' || basis === null ) {
@@ -414,26 +441,26 @@
     if ( align ) {
       Utils.$addClass(el, 'gui-flex-align-' + align);
     }
-  }
+  };
 
   /**
    * Wrapper for creating a draggable container
    *
-   * @param   DOMElement        el          The container
-   * @param   Function          onDown      On down action callback
-   * @param   Function          onMove      On move action callback
-   * @param   Function          onUp        On up action callback
+   * @function createDrag
+   * @memberof OSjs.GUI.Helpers
    *
-   * @api OSjs.GUI.Helpers.createDrag()
+   * @param   {Node}              el          The container
+   * @param   {Function}          onDown      On down action callback
+   * @param   {Function}          onMove      On move action callback
+   * @param   {Function}          onUp        On up action callback
    */
-  function createDrag(el, onDown, onMove, onUp) {
+  OSjs.GUI.Helpers.createDrag = function createDrag(el, onDown, onMove, onUp) {
     onDown = onDown || function() {};
     onMove = onMove || function() {};
     onUp = onUp || function() {};
 
     var startX, startY, currentX, currentY;
     var dragging = false;
-    var boundUp, boundMove;
 
     function _onMouseDown(ev, pos, touchDevice) {
       ev.preventDefault();
@@ -444,8 +471,8 @@
       onDown(ev, {x: startX, y: startY});
       dragging = true;
 
-      boundUp = Utils.$bind(window, 'mouseup', _onMouseUp, false);
-      boundMove = Utils.$bind(window, 'mousemove', _onMouseMove, false);
+      Utils.$bind(window, 'mouseup:guidrag', _onMouseUp, false);
+      Utils.$bind(window, 'mousemove:guidrag', _onMouseMove, false);
     }
 
     function _onMouseMove(ev, pos, touchDevice) {
@@ -466,29 +493,308 @@
       onUp(ev, {x: currentX, y: currentY});
       dragging = false;
 
-      boundUp = Utils.$unbind(boundUp);
-      boundMove = Utils.$unbind(boundMove);
+      Utils.$unbind(window, 'mouseup:guidrag');
+      Utils.$unbind(window, 'mousemove:guidrag');
     }
 
     Utils.$bind(el, 'mousedown', _onMouseDown, false);
-  }
-
-  /////////////////////////////////////////////////////////////////////////////
-  // EXPORTS
-  /////////////////////////////////////////////////////////////////////////////
-
-  OSjs.GUI.Helpers = {
-    getProperty: getProperty,
-    getValueLabel: getValueLabel,
-    getViewNodeValue: getViewNodeValue,
-    getLabel: getLabel,
-    getIcon: getIcon,
-    getWindowId: getWindowId,
-    createInputLabel: createInputLabel,
-    createElement: createElement,
-    createDrag: createDrag,
-    setProperty: setProperty,
-    setFlexbox: setFlexbox
   };
 
-})(OSjs.API, OSjs.Utils, OSjs.VFS);
+  /**
+   * Method for getting the next (or previous) element in sequence
+   *
+   * If you don't supply a current element, the first one will be taken!
+   *
+   * @function getNextElement
+   * @memberof OSjs.GUI.Helpers
+   *
+   * @param   {Boolean}     prev        Get previous element instead of next
+   * @param   {Node}        el          The current element
+   * @param   {Node}        root        The root container
+   */
+  GUI.Helpers.getNextElement = function getNextElement(prev, current, root) {
+    function getElements() {
+      var ignore_roles = ['menu', 'menuitem', 'grid', 'gridcell', 'listitem'];
+      var list = [];
+
+      root.querySelectorAll('.gui-element').forEach(function(e) {
+        // Ignore focused and disabled elements, and certain aria roles
+        if ( Utils.$hasClass(e, 'gui-focus-element') || ignore_roles.indexOf(e.getAttribute('role')) >= 0 || e.getAttribute('data-disabled') === 'true' ) {
+          return;
+        }
+
+        // Elements without offsetParent are invisible
+        if ( e.offsetParent ) {
+          list.push(e);
+        }
+      });
+      return list;
+    }
+
+    function getCurrentIndex(els, m) {
+      var found = -1;
+
+      // Simply get index from array, it seems indexOf is a bit iffy here ?!
+      if ( m ) {
+        els.every(function(e, idx) {
+          if ( e === m ) {
+            found = idx;
+          }
+          return found === -1;
+        });
+      }
+
+      return found;
+    }
+
+    function getCurrentParent(els, m) {
+      if ( m ) {
+        var cur = m;
+        while ( cur.parentNode ) {
+          if ( Utils.$hasClass(cur, 'gui-element') ) {
+            return cur;
+          }
+          cur = cur.parentNode;
+        }
+
+        return null;
+      }
+
+      // When we dont have a initial element, take the first one
+      return els[0];
+    }
+
+    function getNextIndex(els, p, i) {
+      // This could probably be prettier, but it does the job
+      if ( prev ) {
+        i = (i <= 0) ? (els.length) - 1 : (i - 1);
+      } else {
+        i = (i >= (els.length - 1)) ? 0 : (i + 1);
+      }
+      return i;
+    }
+
+    function getNext(els, i) {
+      var next = els[i];
+
+      // Get "real" elements from input wrappers
+      if ( next.tagName.match(/^GUI\-(BUTTON|TEXT|PASSWORD|SWITCH|CHECKBOX|RADIO|SELECT)/) ) {
+        next = next.querySelectorAll('input, textarea, button, select')[0];
+      }
+
+      // Special case for elements that wraps
+      if ( next.tagName === 'GUI-FILE-VIEW' ) {
+        next = next.children[0];
+      }
+
+      return next;
+    }
+
+    if ( root ) {
+      var elements = getElements();
+      if ( elements.length ) {
+        var currentParent = getCurrentParent(elements, current);
+        var currentIndex = getCurrentIndex(elements, currentParent);
+
+        if ( currentIndex >= 0 ) {
+          var nextIndex = getNextIndex(elements, currentParent, currentIndex);
+          return getNext(elements, nextIndex);
+        }
+      }
+    }
+
+    return null;
+  };
+
+  /**
+   * Create a draggable DOM element
+   *
+   * @function createDraggable
+   * @memberof OSjs.GUI.Helpers
+   *
+   * @param  {Node}          el                               DOMElement
+   * @param  {Object}        args                             JSON of draggable params
+   * @param  {Object}        args.data                        The data (JSON by default)
+   * @param  {String}        [args.type]                      A custom drag event 'type'
+   * @param  {String}        [args.effect=move]               The draggable effect (cursor)
+   * @param  {String}        [args.mime=application/json]     The mime type of content
+   * @param  {Function}      args.onStart                     Callback when drag started => fn(ev, el, args)
+   * @param  {Function}      args.onEnd                       Callback when drag ended => fn(ev, el, args)
+   */
+  GUI.Helpers.createDraggable = function createDraggable(el, args) {
+    args = OSjs.Utils.argumentDefaults(args, {
+      type       : null,
+      effect     : 'move',
+      data       : null,
+      mime       : 'application/json',
+      dragImage  : null,
+      onStart    : function() { return true; },
+      onEnd      : function() { return true; }
+    });
+
+    if ( OSjs.Utils.isIE() ) {
+      args.mime = 'text';
+    }
+
+    function _toString(mime) {
+      return JSON.stringify({
+        type:   args.type,
+        effect: args.effect,
+        data:   args.data,
+        mime:   args.mime
+      });
+    }
+
+    function _dragStart(ev) {
+      try {
+        ev.dataTransfer.effectAllowed = args.effect;
+        if ( args.dragImage && (typeof args.dragImage === 'function') ) {
+          if ( ev.dataTransfer.setDragImage ) {
+            var dragImage = args.dragImage(ev, el);
+            if ( dragImage ) {
+              var dragEl    = dragImage.element;
+              var dragPos   = dragImage.offset;
+
+              document.body.appendChild(dragEl);
+              ev.dataTransfer.setDragImage(dragEl, dragPos.x, dragPos.y);
+            }
+          }
+        }
+        ev.dataTransfer.setData(args.mime, _toString(args.mime));
+      } catch ( e ) {
+        console.warn('Failed to dragstart: ' + e);
+        console.warn(e.stack);
+      }
+    }
+
+    el.setAttribute('draggable', 'true');
+    el.setAttribute('aria-grabbed', 'false');
+
+    el.addEventListener('dragstart', function(ev) {
+      this.setAttribute('aria-grabbed', 'true');
+
+      this.style.opacity = '0.4';
+      if ( ev.dataTransfer ) {
+        _dragStart(ev);
+      }
+      return args.onStart(ev, this, args);
+    }, false);
+
+    el.addEventListener('dragend', function(ev) {
+      this.setAttribute('aria-grabbed', 'false');
+      this.style.opacity = '1.0';
+      return args.onEnd(ev, this, args);
+    }, false);
+  };
+
+  /**
+   * Create a droppable DOM element
+   *
+   * @function createDroppable
+   * @memberof OSjs.GUI.Helpers
+   *
+   * @param   {Node}            el                              DOMElement
+   * @param   {Object}          args                            JSON of droppable params
+   * @param   {String}          [args.accept]                   Accept given drag event 'type'
+   * @param   {String}          [args.effect=move]              The draggable effect (cursor)
+   * @param   {String}          [args.mime=application/json]    The mime type of content
+   * @param   {Boolean}         [args.files=true]               Support file drops from OS
+   * @param   {Function}        args.onEnter                    Callback when drag entered => fn(ev, el)
+   * @param   {Function}        args.onOver                     Callback when drag over => fn(ev, el)
+   * @param   {Function}        args.onLeave                    Callback when drag leave => fn(ev, el)
+   * @param   {Function}        args.onDrop                     Callback when drag drop all => fn(ev, el)
+   * @param   {Function}        args.onFilesDropped             Callback when drag drop file => fn(ev, el, files, args)
+   * @param   {Function}        args.onItemDropped              Callback when drag drop internal object => fn(ev, el, item, args)
+   */
+  GUI.Helpers.createDroppable = function createDroppable(el, args) {
+    args = OSjs.Utils.argumentDefaults(args, {
+      accept         : null,
+      effect         : 'move',
+      mime           : 'application/json',
+      files          : true,
+      onFilesDropped : function() { return true; },
+      onItemDropped  : function() { return true; },
+      onEnter        : function() { return true; },
+      onOver         : function() { return true; },
+      onLeave        : function() { return true; },
+      onDrop         : function() { return true; }
+    });
+
+    if ( OSjs.Utils.isIE() ) {
+      args.mime = 'text';
+    }
+
+    function getParent(start, matcher) {
+      if ( start === matcher ) { return true; }
+      var i = 10;
+
+      while ( start && i > 0 ) {
+        if ( start === matcher ) {
+          return true;
+        }
+        start = start.parentNode;
+        i--;
+      }
+      return false;
+    }
+
+    function _onDrop(ev, el) {
+      ev.stopPropagation();
+      ev.preventDefault();
+
+      args.onDrop(ev, el);
+      if ( !ev.dataTransfer ) { return true; }
+
+      if ( args.files ) {
+        var files = ev.dataTransfer.files;
+        if ( files && files.length ) {
+          return args.onFilesDropped(ev, el, files, args);
+        }
+      }
+
+      var data;
+      try {
+        data = ev.dataTransfer.getData(args.mime);
+      } catch ( e ) {
+        console.warn('Failed to drop: ' + e);
+      }
+      if ( data ) {
+        var item = JSON.parse(data);
+        if ( args.accept === null || args.accept === item.type ) {
+          return args.onItemDropped(ev, el, item, args);
+        }
+      }
+
+      return false;
+    }
+
+    el.setAttribute('aria-dropeffect', args.effect);
+
+    el.addEventListener('drop', function(ev) {
+      //Utils.$removeClass(el, 'onDragEnter');
+      return _onDrop(ev, this);
+    }, false);
+
+    el.addEventListener('dragenter', function(ev) {
+      //Utils.$addClass(el, 'onDragEnter');
+      return args.onEnter.call(this, ev, this, args);
+    }, false);
+
+    el.addEventListener('dragover', function(ev) {
+      ev.preventDefault();
+      if ( !getParent(ev.target, el) ) {
+        return false;
+      }
+
+      ev.stopPropagation();
+      ev.dataTransfer.dropEffect = args.effect;
+      return args.onOver.call(this, ev, this, args);
+    }, false);
+
+    el.addEventListener('dragleave', function(ev) {
+      //Utils.$removeClass(el, 'onDragEnter');
+      return args.onLeave.call(this, ev, this, args);
+    }, false);
+  };
+
+})(OSjs.API, OSjs.Utils, OSjs.VFS, OSjs.GUI);

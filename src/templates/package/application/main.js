@@ -3,16 +3,16 @@
  *
  * Copyright (c) 2011-2016, Anders Evenrud <andersevenrud@gmail.com>
  * All rights reserved.
- * 
+ *
  * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions are met: 
- * 
+ * modification, are permitted provided that the following conditions are met:
+ *
  * 1. Redistributions of source code must retain the above copyright notice, this
- *    list of conditions and the following disclaimer. 
+ *    list of conditions and the following disclaimer.
  * 2. Redistributions in binary form must reproduce the above copyright notice,
  *    this list of conditions and the following disclaimer in the documentation
- *    and/or other materials provided with the distribution. 
- * 
+ *    and/or other materials provided with the distribution.
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
  * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
  * WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -50,14 +50,21 @@
     var root = Window.prototype.init.apply(this, arguments);
     var self = this;
 
-    // Load and set up scheme (GUI) here
+    // Load and render `scheme.html` file
     scheme.render(this, 'EXAMPLEWindow', root);
+
+    // Put your GUI code here (or make a new prototype function and call it):
 
     return root;
   };
 
   ApplicationEXAMPLEWindow.prototype.destroy = function() {
-    Window.prototype.destroy.apply(this, arguments);
+    // This is where you remove objects, dom elements etc attached to your
+    // instance. You can remove this if not used.
+    if ( Window.prototype.destroy.apply(this, arguments) ) {
+      return true;
+    }
+    return false;
   };
 
   /////////////////////////////////////////////////////////////////////////////
@@ -72,21 +79,21 @@
   ApplicationEXAMPLE.constructor = Application;
 
   ApplicationEXAMPLE.prototype.destroy = function() {
-    return Application.prototype.destroy.apply(this, arguments);
+    // This is where you remove objects, dom elements etc attached to your
+    // instance. You can remove this if not used.
+    if ( Application.prototype.destroy.apply(this, arguments) ) {
+      return true;
+    }
+    return false;
   };
 
-  ApplicationEXAMPLE.prototype.init = function(settings, metadata, onInited) {
+  ApplicationEXAMPLE.prototype.init = function(settings, metadata) {
     Application.prototype.init.apply(this, arguments);
 
     var self = this;
-    var url = API.getApplicationResource(this, './scheme.html');
-    var scheme = GUI.createScheme(url);
-    scheme.load(function(error, result) {
+    this._loadScheme('./scheme.html', function(scheme) {
       self._addWindow(new ApplicationEXAMPLEWindow(self, metadata, scheme));
-      onInited();
     });
-
-    this._setScheme(scheme);
   };
 
   /////////////////////////////////////////////////////////////////////////////
@@ -95,6 +102,6 @@
 
   OSjs.Applications = OSjs.Applications || {};
   OSjs.Applications.ApplicationEXAMPLE = OSjs.Applications.ApplicationEXAMPLE || {};
-  OSjs.Applications.ApplicationEXAMPLE.Class = ApplicationEXAMPLE;
+  OSjs.Applications.ApplicationEXAMPLE.Class = Object.seal(ApplicationEXAMPLE);
 
 })(OSjs.Core.Application, OSjs.Core.Window, OSjs.Utils, OSjs.API, OSjs.VFS, OSjs.GUI);

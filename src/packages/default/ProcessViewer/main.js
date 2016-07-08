@@ -81,9 +81,9 @@
     }
 
     view.set('columns', [
-      {label: 'Name', basis: '100px', grow: 1, shrink: 1},
-      {label: 'PID', basis: '60px', grow: 0, shrink: 0, textalign: 'right'},
-      {label: 'Alive', basis: '60px', grow: 0, shrink: 0, textalign: 'right'}
+      {label: 'Name'},
+      {label: 'PID', size: '60px', textalign: 'right'},
+      {label: 'Alive', size: '60px', textalign: 'right'}
     ]);
 
     scheme.find(this, 'ButtonKill').on('click', function() {
@@ -122,7 +122,7 @@
     return Application.prototype.destroy.apply(this, arguments);
   };
 
-  ApplicationProcessViewer.prototype.init = function(settings, metadata, onInited) {
+  ApplicationProcessViewer.prototype.init = function(settings, metadata) {
     Application.prototype.init.apply(this, arguments);
 
     var self = this;
@@ -130,8 +130,6 @@
     var scheme = GUI.createScheme(url);
     scheme.load(function(error, result) {
       self._addWindow(new ApplicationProcessViewerWindow(self, metadata, scheme));
-
-      onInited();
     });
 
     this._setScheme(scheme);
@@ -143,6 +141,6 @@
 
   OSjs.Applications = OSjs.Applications || {};
   OSjs.Applications.ApplicationProcessViewer = OSjs.Applications.ApplicationProcessViewer || {};
-  OSjs.Applications.ApplicationProcessViewer.Class = ApplicationProcessViewer;
+  OSjs.Applications.ApplicationProcessViewer.Class = Object.seal(ApplicationProcessViewer);
 
 })(OSjs.Core.Application, OSjs.Core.Window, OSjs.Utils, OSjs.API, OSjs.VFS, OSjs.GUI);

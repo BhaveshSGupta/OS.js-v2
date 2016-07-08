@@ -31,9 +31,10 @@
 (function(Utils, API, GUI, Window) {
   'use strict';
 
-  var OSjs = window.OSjs = window.OSjs || {};
-
-  OSjs.Helpers = OSjs.Helpers || {};
+  /**
+   * @namespace OSjs.Helpers.FirefoxMarketplace
+   * @memberof OSjs.Helpers
+   */
 
   var URL_FMT = 'https://marketplace.firefox.com/api/';
 
@@ -47,12 +48,10 @@
 
   function apiCall(url, callback) {
     API.curl({
-      body: {
-        url: url,
-        binary: false,
-        mime: 'application/json',
-        method: 'GET'
-      }
+      url: url,
+      binary: false,
+      mime: 'application/json',
+      method: 'GET'
     }, function(error, response) {
       if ( error ) {
         callback(error);
@@ -78,16 +77,18 @@
   /**
    * The FirefoxMarketplace wrapper class
    *
+   * <pre><b>
    * This is a private class and can only be aquired through
    * OSjs.Helpers.FirefoxMarketplace.createInsatance()
+   * </b></pre>
+   *
+   * @summary Helper for communicating with Firefox Marketplace.
+   *
+   * @constructor Class
+   * @memberof OSjs.Helpers.FirefoxMarketplace
+   * @see OSjs.Helpers.FirefoxMarketplace.createInsatance
    *
    * @link http://firefox-marketplace-api.readthedocs.org/en/latest
-   *
-   * @see OSjs.Helpers.FirefoxMarketplace.createInsatance()
-   * @api OSjs.Helpers.FirefoxMarketplace.FirefoxMarketplace
-   *
-   * @private
-   * @class
    */
   function FirefoxMarketplace(clientId) {
   }
@@ -109,13 +110,12 @@
   /**
    * Call the Marketplace API
    *
-   * @param   String      func          The URI (function)
-   * @param   Object      data          Tuple with arguments
-   * @param   Function    callback      Callback => fn(error, result, url)
+   * @function _call
+   * @memberof OSjs.Helpers.FirefoxMarketplace.Class#
    *
-   * @return  void
-   *
-   * @method  FirefoxMarketplace::_call()
+   * @param   {String}      func          The URI (function)
+   * @param   {Object}      data          Tuple with arguments
+   * @param   {Function}    callback      Callback => fn(error, result, url)
    */
   FirefoxMarketplace.prototype._call = function(func, data, callback) {
     var url = buildURL(func, data);
@@ -125,12 +125,11 @@
   /**
    * Get metadata for application by id
    *
-   * @param   int         id            Application ID
-   * @param   Function    callback      Callback => fn(error, result, url)
+   * @function _metadata
+   * @memberof OSjs.Helpers.FirefoxMarketplace.Class#
    *
-   * @return  void
-   *
-   * @method  FirefoxMarketplace::_metadata()
+   * @param   {Number}      id            Application ID
+   * @param   {Function}    callback      Callback => fn(error, result, url)
    */
   FirefoxMarketplace.prototype._metadata = function(appId, callback) {
     var func = 'v2/apps/app/' + appId.toString() + '/';
@@ -159,12 +158,11 @@
    *
    * If no query is given, the featured list is retrieved
    *
-   * @param   String      q             Query string (optional)
-   * @param   Function    callback      Callback => fn(error, result)
+   * @function search
+   * @memberof OSjs.Helpers.FirefoxMarketplace.Class#
    *
-   * @return  void
-   *
-   * @method  FirefoxMarketplace::search()
+   * @param   {String}      [q]           Query string
+   * @param   {Function}    callback      Callback => fn(error, result)
    */
   FirefoxMarketplace.prototype.search = function(q, callback) {
     var func = 'v1/fireplace/search/featured/';
@@ -192,12 +190,11 @@
   /**
    * Launch an application by Id
    *
-   * @param   int         id            Application ID
-   * @param   Function    callback      Callback => fn(error, result)
+   * @function launch
+   * @memberof OSjs.Helpers.FirefoxMarketplace.Class#
    *
-   * @return  void
-   *
-   * @method  FirefoxMarketplace::launch()
+   * @param   {Number}      id            Application ID
+   * @param   {Function}    callback      Callback => fn(error, result)
    */
   FirefoxMarketplace.prototype.launch = function(id, callback) {
     callback = callback || function() {};
@@ -244,9 +241,10 @@
   /**
    * Gets the currently running instance
    *
-   * @api OSjs.Helpers.FirefoxMarketplace.getInstance()
+   * @function getInstance
+   * @memberof OSjs.Helpers.FirefoxMarketplace
    *
-   * @return  FirefoxMarketplace       Can also be null
+   * @return  {OSjs.Helpers.FirefoxMarketplace.Class}       Can also be null
    */
   OSjs.Helpers.FirefoxMarketplace.getInstance = function() {
     return SingletonInstance;
@@ -255,14 +253,12 @@
   /**
    * Create an instance of FirefoxMarketplace
    *
-   * @param   Object    args      Arguments
-   * @param   Function  callback  Callback function => fn(error, instance)
+   * @function createInstance
+   * @memberof OSjs.Helpers.FirefoxMarketplace
    *
-   * @option  args    Array     scope     What scope to load
-   *
-   * @api OSjs.Helpers.FirefoxMarketplace.createInstance()
-   *
-   * @return  void
+   * @param   {Object}    args          Arguments
+   * @param   {Array}     args.scope    What scope to load
+   * @param   {Function}  callback      Callback function => fn(error, instance)
    */
   OSjs.Helpers.FirefoxMarketplace.createInstance = function(args, callback) {
     args = args || {};

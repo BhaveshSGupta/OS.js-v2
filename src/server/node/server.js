@@ -3,17 +3,17 @@
  *
  * Copyright (c) 2011-2016, Anders Evenrud <andersevenrud@gmail.com>
  * All rights reserved.
- * 
+ *
  * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions are met: 
- * 
+ * modification, are permitted provided that the following conditions are met:
+ *
  * 1. Redistributions of source code must retain the above copyright notice, this
- *    list of conditions and the following disclaimer. 
+ *    list of conditions and the following disclaimer.
  * 2. Redistributions in binary form must reproduce the above copyright notice,
  *    this list of conditions and the following disclaimer in the documentation
- *    and/or other materials provided with the distribution. 
- * 
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+ *    and/or other materials provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS 'AS IS' AND
  * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
  * WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
  * DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR
@@ -28,26 +28,63 @@
  * @licence Simplified BSD License
  */
 (function(_path, _server) {
-  var DISTDIR = (process && process.argv.length > 2) ? process.argv[2] : 'dist';
-  if ( (process.argv[1] || '').match(/(mocha|grunt)$/) ) {
-    DISTDIR = 'dist-dev';
-  }
+  'use strict';
 
-  var root = _path.join(__dirname, '/../../../');
+  /**
+   * @namespace Server
+   */
+
+  var DIST = (process && process.argv.length > 2) ? process.argv[2] : 'dist';
+  var ROOT = _path.join(__dirname, '/../../../');
+  var PORT = null;
+  var NOLOG = false;
+
+  (function() {
+    var i, arg;
+    for ( i = 0; i < process.argv.length; i++ ) {
+      arg = process.argv[i];
+
+      if ( ['-nl', '--no-log'].indexOf(arg) >= 0 ) {
+        NOLOG = true;
+      } else if ( ['-p', '--port'].indexOf(arg) >= 0 ) {
+        i++;
+        PORT = process.argv[i];
+      } else if ( ['-r', '--root'].indexOf(arg) >= 0 ) {
+        i++;
+        ROOT = process.argv[i];
+      }
+    }
+  })();
+
+  if ( DIST === 'x11' ) {
+    DIST = 'dist';
+    ROOT = _path.dirname(__dirname);
+  } else {
+    if ( (process.argv[1] || '').match(/(mocha|grunt)$/) ) {
+      DIST = 'dist-dev';
+    }
+  }
 
   /////////////////////////////////////////////////////////////////////////////
   // MAIN
   /////////////////////////////////////////////////////////////////////////////
 
-  console.log('***');
-  console.log('***', 'THIS IS A WORK IN PROGRESS!!!');
-  console.log('***');
+  process.chdir(ROOT);
 
-  process.chdir(root);
-
-  process.on("exit", function() {
+  process.on('exit', function() {
     _server.close();
   });
 
-  _server.listen(root, DISTDIR);
-})(require("path"), require("./http.js"));
+  process.on('uncaughtException', function(error) {
+    console.log('UNCAUGHT EXCEPTION', error, error.stack);
+  });
+
+  _server.listen({
+    port: PORT,
+    dirname: __dirname,
+    root: ROOT,
+    dist: DIST,
+    logging: !NOLOG,
+    nw: false
+  });
+})(require('path'), require('./http.js'));

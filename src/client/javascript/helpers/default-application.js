@@ -31,9 +31,6 @@
 (function(Application, Window, Utils, VFS, API, GUI) {
   'use strict';
 
-  window.OSjs       = window.OSjs       || {};
-  OSjs.Helpers      = OSjs.Helpers      || {};
-
   /////////////////////////////////////////////////////////////////////////////
   // Default Application Helper
   /////////////////////////////////////////////////////////////////////////////
@@ -43,10 +40,12 @@
    *
    * Handles opening, saving and creation of files.
    *
-   * @see OSjs.Helpers.DefaultApplicationWindow
-   * @api OSjs.Helpers.DefaultApplication
+   * @summary Helper for making Applications with file interaction.
    *
-   * @class
+   * @constructor
+   * @memberof OSjs.Helpers
+   * @see OSjs.Helpers.DefaultApplicationWindow
+   * @see OSjs.Core.Application
    */
   function DefaultApplication(name, args, metadata, opts) {
     this.defaultOptions = Utils.argumentDefaults(opts, {
@@ -74,8 +73,8 @@
   /**
    * Initialize
    */
-  DefaultApplication.prototype.init = function(settings, metadata, onInited, onLoaded) {
-    Application.prototype.init.call(this, settings, metadata, onInited);
+  DefaultApplication.prototype.init = function(settings, metadata, onLoaded) {
+    Application.prototype.init.call(this, settings, metadata);
 
     var self = this;
     var url = API.getApplicationResource(this, './scheme.html');
@@ -88,8 +87,6 @@
       } else {
         onLoaded(scheme, file);
       }
-
-      onInited();
     });
 
     this._setScheme(scheme);
@@ -124,12 +121,11 @@
   /**
    * Open given File
    *
-   * @param   OSjs.VFS.File       file        File
-   * @param   OSjs.Core.Window    win         Window reference
+   * @function openFile
+   * @memberof OSjs.Helpers.DefaultApplication#
    *
-   * @return  void
-   *
-   * @method  DefaultApplication::openFile()
+   * @param   {OSjs.VFS.File}       file        File
+   * @param   {OSjs.Core.Window}    win         Window reference
    */
   DefaultApplication.prototype.openFile = function(file, win) {
     var self = this;
@@ -163,7 +159,7 @@
 
     win._toggleLoading(true);
 
-    function vfsCallback(error, result) {
+    function CallbackVFS(error, result) {
       win._toggleLoading(false);
       if ( onError(error) ) {
         return;
@@ -172,9 +168,9 @@
     }
 
     if ( this.defaultOptions.readData ) {
-      VFS.read(file, vfsCallback, {type: this.defaultOptions.rawData ? 'binary' : 'text'});
+      VFS.read(file, CallbackVFS, {type: this.defaultOptions.rawData ? 'binary' : 'text'});
     } else {
-      VFS.url(file, vfsCallback);
+      VFS.url(file, CallbackVFS);
     }
 
     return true;
@@ -183,13 +179,12 @@
   /**
    * Save given File
    *
-   * @param   OSjs.VFS.File       file        File
-   * @param   Mixed               value       File contents
-   * @param   OSjs.Core.Window    win         Window reference
+   * @function saveFile
+   * @memberof OSjs.Helpers.DefaultApplication#
    *
-   * @return  void
-   *
-   * @method  DefaultApplication::saveFile()
+   * @param   {OSjs.VFS.File}       file        File
+   * @param   {Mixed}               value       File contents
+   * @param   {OSjs.Core.Window}    win         Window reference
    */
   DefaultApplication.prototype.saveFile = function(file, value, win) {
     var self = this;
@@ -215,13 +210,12 @@
   /**
    * Open Save dialog
    *
-   * @param   OSjs.VFS.File       file        File
-   * @param   OSjs.Core.Window    win         Window reference
-   * @param   boolean             saveAs      SaveAs ?
+   * @function saveDialog
+   * @memberof OSjs.Helpers.DefaultApplication#
    *
-   * @return  void
-   *
-   * @method  DefaultApplication::saveDialog()
+   * @param   {OSjs.VFS.File}       file        File
+   * @param   {OSjs.Core.Window}    win         Window reference
+   * @param   {Boolean}             saveAs      SaveAs ?
    */
   DefaultApplication.prototype.saveDialog = function(file, win, saveAs) {
     var self = this;
@@ -252,12 +246,11 @@
   /**
    * Open Open dialog
    *
-   * @param   OSjs.VFS.File       file        (Optional) Current File
-   * @param   OSjs.Core.Window    win         Window reference
+   * @function openDialog
+   * @memberof OSjs.Helpers.DefaultApplication#
    *
-   * @return  void
-   *
-   * @method  DefaultApplication::openDialog()
+   * @param   {OSjs.VFS.File}       [file]      Current File
+   * @param   {OSjs.Core.Window}    [win]       Window reference
    */
   DefaultApplication.prototype.openDialog = function(file, win) {
     var self = this;
@@ -285,12 +278,11 @@
   /**
    * Create a new file
    *
-   * @param   String              path        (Optional) Current path
-   * @param   OSjs.Core.Window    win         Window reference
+   * @function newDialog
+   * @memberof OSjs.Helpers.DefaultApplication#
    *
-   * @return  void
-   *
-   * @method  DefaultApplication::newDialog()
+   * @param   {String}              [path]        Current path
+   * @param   {OSjs.Core.Window}    [win]         Window reference
    */
   DefaultApplication.prototype.newDialog = function(path, win) {
     var self = this;

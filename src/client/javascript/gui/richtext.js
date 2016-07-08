@@ -134,8 +134,14 @@
    *
    * "Richt text" input area.
    *
-   * @api OSjs.GUI.Elements.gui-richtext
-   * @class
+   * <pre><code>
+   *   getter    value   String        The value/contents
+   *   setter    value   String        The value/contents
+   * </code></pre>
+   *
+   * @constructs OSjs.GUI.Element
+   * @memberof OSjs.GUI.Elements
+   * @var gui-richtext
    */
   GUI.Elements['gui-richtext'] = {
     bind: function(el, evName, callback, params) {
@@ -162,8 +168,12 @@
       el.appendChild(iframe);
 
       setTimeout(function() {
-        setDocumentData(el, text);
-      }, 0);
+        try {
+          setDocumentData(el, text);
+        } catch ( e ) {
+          console.warn('gui-richtext', 'build()', e);
+        }
+      }, 1);
     },
     call: function(el, method, args) {
       var doc = getDocument(el);

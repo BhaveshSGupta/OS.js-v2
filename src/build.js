@@ -27,8 +27,20 @@
  * @author  Anders Evenrud <andersevenrud@gmail.com>
  * @licence Simplified BSD License
  */
-(function(_path, _fs, _less, _ugly, Cleancss) {
+(function(_path, _fs, _less) {
+  /*jshint latedef: false */
+
   'use strict';
+
+  var _ugly;
+  var Cleancss;
+
+  try {
+    _ugly = require('uglify-js');
+  } catch ( e ) {}
+  try {
+    Cleancss = require('clean-css');
+  } catch ( e ) {}
 
   // TODO: Find a better way to handle windows paths
 
@@ -50,6 +62,7 @@
     conf:         _path.join(ROOT, 'src', 'conf'),
     server:       _path.join(ROOT, 'src', 'server'),
     server_node:  _path.join(ROOT, 'src', 'server', 'node'),
+    server_php:   _path.join(ROOT, 'src', 'server', 'php'),
     templates:    _path.join(ROOT, 'src', 'templates'),
     javascript:   _path.join(ROOT, 'src', 'client', 'javascript'),
     stylesheets:  _path.join(ROOT, 'src', 'client', 'stylesheets'),
@@ -66,6 +79,7 @@
      */
     out_custom_config:        _path.join(ROOT, 'src', 'conf', '900-custom.json'),
     out_server_config:        _path.join(ROOT, 'src', 'server', 'settings.json'),
+    out_server_manifest:      _path.join(ROOT, 'src', 'server', 'packages.json'),
     out_client_js:            _path.join(ROOT, 'dist', 'osjs.js'),
     out_client_css:           _path.join(ROOT, 'dist', 'osjs.css'),
     out_client_dialogs:       _path.join(ROOT, 'dist', 'dialogs.html'),
@@ -93,14 +107,26 @@
   /**
    * Compiles a LESS file
    */
-  function lessFile(src, dest, cb) {
+  function lessFile(src, dest, cfg, cb) {
     console.log('CSS', src.replace(ROOT, ''));
 
+    var base = 'theme.less';
     try {
-      var css = readFile(src).toString();
+      base = cfg.themes.styleBase;
+    } catch ( e ) {}
 
-      _less.render(css).then(function(result) {
+    try {
+      var opt = {
+        sourceMap: {},
+        paths: ['.', PATHS.themes, PATHS.stylesheets]
+      };
+
+      var css = '@import "' + base + '";\n\n';
+      css += readFile(src).toString();
+
+      _less.render(css, opt).then(function(result) {
         writeFile(dest, result.css);
+        writeFile(dest + '.map', result.map);
         cb();
       }, function(error) {
         console.warn(error);
@@ -172,6 +198,14 @@
   }
 
   /**
+   * Wrapper for warning message
+   */
+  function warning(grunt, str) {
+    str = 'WARN: ' + str;
+    grunt.log.writeln(str.yellow.bold);
+  }
+
+  /**
    * Merges two objects together
    */
   function mergeObject(into, from) {
@@ -192,6 +226,36 @@
       return obj1;
     }
     return mergeJSON(into, from);
+  }
+
+  /**
+   * Removes nulls from JSON
+   */
+  function removeNulls(obj) {
+    var isArray = obj instanceof Array;
+    for (var k in obj) {
+      if ( obj[k] === null ) {
+        if ( isArray ) {
+          obj.splice(k, 1);
+        } else {
+          delete obj[k];
+        }
+      } else if ( typeof obj[k] === 'object') {
+        removeNulls(obj[k]);
+      }
+    }
+  }
+
+  function aQueue(queue, every, done) {
+    (function _next(index) {
+      if ( index >= queue.length ) {
+        return done();
+      }
+
+      every(queue[index], function() {
+        _next(index + 1);
+      });
+    })(0);
   }
 
   /////////////////////////////////////////////////////////////////////////////
@@ -218,7 +282,7 @@
    * Fixes Windows paths (for JSON)
    */
   function fixWinPath(str) {
-    if ( ISWIN ) {
+    if ( typeof str === 'string' && ISWIN ) {
       return str.replace(/(["\s'$`\\])/g,'\\$1').replace(/\\+/g, '/');
     }
     return str;
@@ -254,20 +318,6 @@
    * Sets a config variable
    */
   var setConfigPath = (function() {
-    function removeNulls(obj) {
-      var isArray = obj instanceof Array;
-      for (var k in obj) {
-        if ( obj[k] === null ) {
-          if ( isArray ) {
-            obj.splice(k, 1);
-          } else {
-            delete obj[k];
-          }
-        } else if ( typeof obj[k] === 'object') {
-          removeNulls(obj[k]);
-        }
-      }
-    }
 
     function getNewTree(key, value) {
       var queue = key.split(/\./);
@@ -295,7 +345,7 @@
         return false;
       } else if ( value === 'null' ) {
         return null;
-      } else if ( value.match(/^\d+$/) ) {
+      } else if ( value.match(/^\d+$/) && !String(value).match(/^0/) ) {
         return parseInt(value, 10);
       } else if ( value.match(/^\d{0,2}(\.\d{0,2}){0,1}$/) ) {
         return parseFloat(value);
@@ -366,7 +416,7 @@
       var current = getConfigPath(grunt, 'client.Preloads') || {};
       current[name] = {type: type, src: path};
 
-      setConfigPath(grunt, 'client.Preloads', current, true);
+      setConfigPath(grunt, 'client.Preloads', {client: {Preloads: current}}, true);
 
       return current;
     };
@@ -392,21 +442,16 @@
       ignores = ignores || [];
 
       var config = {};
+
+      // src/conf files
       var files = getConfigFiles(PATHS.conf);
       files.forEach(function(iter) {
         if ( ignores.indexOf(_path.basename(iter)) >= 0 ) {
           return;
         }
-
-        try {
-          var json = JSON.parse(_fs.readFileSync(iter));
-          var tjson = JSON.parse(JSON.stringify(config));
-          config = mergeObject(tjson, json);
-        } catch ( e ) {
-          console.log(e.stack);
-          grunt.fail.fatal('WARNING: Failed to parse ' + iter.replace(ROOT, ''));
-        }
+        config = readAndMerge(grunt, iter, config);
       });
+
       return JSON.parse(JSON.stringify(config));
     }
 
@@ -473,13 +518,28 @@
     PackageException.prototype = Object.create(Error.prototype);
     PackageException.constructor = Error;
 
-    function check(json) {
+    function check(grunt, json, all, pn) {
       if ( !json || !Object.keys(json).length ) {
         throw new PackageException('Package manifest is empty');
       }
-      if ( json.enabled === false || json.enabled === 'false' ) {
-        throw new PackageException('Package is disabled');
+
+      if ( !all ) {
+        var currentEnabled = getConfigPath(grunt, 'packages.ForceEnable') || [];
+        var currentDisabled = getConfigPath(grunt, 'packages.ForceDisable') || [];
+
+        if ( String(json.enabled) === 'false' ) {
+          if ( currentEnabled.indexOf(pn) < 0 ) {
+            return false;
+            //throw new PackageException('Package is disabled');
+          }
+        } else {
+          if ( currentDisabled.indexOf(pn) >= 0 ) {
+            return false;
+            //throw new PackageException('Package is disabled (by user config)');
+          }
+        }
       }
+
       if ( !json.className ) {
         throw new PackageException('Package is missing className');
       }
@@ -494,29 +554,32 @@
         var dir = _path.join(srcDir || PATHS.packages, r);
         getDirectories(dir).forEach(function(p) {
           var pdir = _path.join(dir, p);
-          var mpath = _path.join(pdir, 'package.json');
+          var mpath = _path.join(pdir, 'metadata.json');
 
           if ( _fs.existsSync(mpath) ) {
             var raw = _fs.readFileSync(mpath);
             var name = r + '/' + p;
-            try {
-              var json = JSON.parse(raw);
 
-              if ( check(json) ) {
-                list[name] = json;
-              }
+            var json = JSON.parse(raw);
 
-              json.type = json.type || 'application';
-              json.path = name;
-              json.build = json.build || {};
+            json.type = json.type || 'application';
+            json.path = name;
+            json.build = json.build || {};
+            json.repo = r;
 
-            } catch ( e ) {
-              if ( e instanceof PackageException ) {
-                console.warn('!!!', p, e.message);
-              } else {
-                console.warn('readPackageMetadata()', e, e.stack);
-              }
+            if ( json.preload ) {
+              json.preload = json.preload.map(function(iter) {
+                if ( typeof iter === 'string' ) {
+                  return {
+                    src: iter,
+                    type: iter.match(/\.js/) ? 'javascript' : 'stylesheet'
+                  };
+                }
+                return iter;
+              });
             }
+
+            list[name] = json;
           }
 
         });
@@ -525,14 +588,42 @@
     }
 
     var _cache = null;
-    return function(grunt, dir) {
-      if ( dir ) {
-        return read(grunt, dir);
+    return function(grunt, dir, all) {
+
+      function f(r, a) {
+        if ( a ) {
+          return r;
+        }
+
+        var filtered = [];
+        Object.keys(r).forEach(function(k) {
+          var p = k.split('/')[1];
+          try {
+            if ( check(grunt, r[k], a, p) ) {
+              filtered[k] = r[k];
+              filtered[k].enabled = true;
+            }
+          } catch ( e ) {
+            if ( e instanceof PackageException ) {
+              console.warn('!!!', p, e.message);
+            } else {
+              console.warn('readPackageMetadata()', e, e.stack);
+            }
+          }
+        });
+        return filtered;
       }
+
+      if ( dir ) {
+        return f(read(grunt, dir), all);
+      }
+
       if ( _cache === null ) {
         _cache = read(grunt);
       }
-      return clone(_cache);
+
+      var result = clone(_cache);
+      return all ? result : f(result);
     };
   })();
 
@@ -627,6 +718,20 @@
     return result;
   }
 
+  function readAndMerge(grunt, iter, config) {
+    //console.log('+++', iter);
+    try {
+      if ( _fs.existsSync(iter) ) {
+        var json = JSON.parse(_fs.readFileSync(iter));
+        config = mergeObject(clone(config), json);
+      }
+    } catch ( e ) {
+      console.log(e.stack);
+      grunt.fail.fatal('WARNING: Failed to parse ' + iter.replace(ROOT, ''));
+    }
+    return config;
+  }
+
   /////////////////////////////////////////////////////////////////////////////
   // CONFIGS
   /////////////////////////////////////////////////////////////////////////////
@@ -634,20 +739,13 @@
   function getClientConfig(grunt, dist) {
     var cfg = generateBuildConfig(grunt);
     var settings = clone(cfg.client);
-    var themes = readThemeMetadata(grunt);
-    var extensions = getCoreExtensions(grunt);
-    var mime = cfg.mime;
-
+    var autostart = settings.AutoStart;
     var preloads = [];
-    var styles = themes.styles;
-    var sounds = {};
-    var icons = {};
-    var fonts = themes.fonts;
 
     if ( dist === 'dist-dev' ) {
       preloads.push({
         type: 'javascript',
-        src: _path.join('/', 'client', 'javascript', 'handlers', cfg.handler, 'handler.js')
+        src: '/' + ['client', 'javascript', 'handlers', cfg.handler, 'handler.js'].join('/')
       });
     }
 
@@ -657,6 +755,12 @@
       });
     }
 
+    var themes = readThemeMetadata(grunt);
+    var styles = themes.styles;
+    var sounds = {};
+    var icons = {};
+    var fonts = themes.fonts;
+
     themes.sounds.forEach(function(t) {
       sounds[t.name] = t.title;
     });
@@ -665,15 +769,11 @@
       icons[t.name] = t.title;
     });
 
-    Object.keys(extensions).forEach(function(p) {
-      var e = extensions[p];
-      if ( e.sources ) {
-        e.sources.forEach(function(ee) {
-          preloads.push({
-            type: ee.type,
-            src: _path.join('/', 'packages', p, ee.src)
-          });
-        });
+    var packages = readPackageMetadata();
+    Object.keys(packages).forEach(function(n) {
+      var meta = packages[n];
+      if ( meta.autostart === true ) {
+        autostart.push(meta.className);
       }
     });
 
@@ -681,9 +781,10 @@
     settings.Icons = icons;
     settings.Sounds = sounds;
     settings.Fonts.list = fonts.concat(settings.Fonts.list);
-    settings.MIME = mime;
+    settings.MIME = cfg.mime;
     settings.Preloads = preloads;
     settings.Connection.Dist = dist;
+    settings.AutoStart = autostart;
 
     return settings;
   }
@@ -701,23 +802,40 @@
       (['api.php', 'api.js']).forEach(function(c) {
         var dir = _path.join(PATHS.packages, e, c);
         if ( _fs.existsSync(dir) ) {
-          var path = fixWinPath(dir).replace(fixWinPath(ROOT), '');
+          var path = '/' + fixWinPath(dir).replace(fixWinPath(PATHS.src), cfg.server.srcdir);
           loadExtensions.push(path);
         }
       });
+
+      if ( extensions[e].conf && extensions[e].conf instanceof Array ) {
+        extensions[e].conf.forEach(function(c) {
+          try {
+            var p = _path.join(PATHS.packages, extensions[e].path, c);
+            cfg = readAndMerge(grunt, p, cfg);
+          } catch ( e ) {
+            console.warn('createConfigurationFiles()', e, e.stack);
+          }
+        });
+      }
     });
 
     function buildServer() {
       var jsonSettings = clone(cfg.server);
       jsonSettings.extensions = loadExtensions;
+      jsonSettings.mimes = cfg.mime.mapping;
 
       try {
         jsonSettings.vfs.maxuploadsize = cfg.client.VFS.MaxUploadSize;
       } catch ( e ) {}
 
-      Object.keys(jsonSettings.vfs).forEach(function(key) {
-        if ( typeof jsonSettings.vfs[key] === 'string' ) {
-          jsonSettings.vfs[key] = fixWinPath(jsonSettings.vfs[key]);
+      jsonSettings.vfs.homes = fixWinPath(jsonSettings.vfs.homes);
+      Object.keys(jsonSettings.vfs.mounts).forEach(function(key) {
+        jsonSettings.vfs.mounts[key] = fixWinPath(jsonSettings.vfs.mounts[key]);
+      });
+
+      Object.keys(cfg.server).forEach(function(k) {
+        if ( typeof jsonSettings[k] === 'undefined' ) {
+          jsonSettings[k] = cfg.server[k];
         }
       });
 
@@ -768,22 +886,26 @@
     function addScript(i) {
       scripts.push('    <script type="text/javascript" charset="utf-8" src="' + i + '"></script>');
     }
+    var appendString = '';
+    if ( cfg.client.Connection.AppendVersion ) {
+      appendString = '?ver=' + cfg.client.Connection.AppendVersion;
+    }
 
     if ( dist === 'dist' ) {
-      addStyle('osjs.css');
-      addScript('osjs.js');
-      addScript('locales.js');
+      addStyle('osjs.css' + appendString);
+      addScript('osjs.js' + appendString);
+      addScript('locales.js' + appendString);
     } else {
       cfg.javascript.forEach(function(i) {
         if ( !i.match(/handlers\/(\w+)\/handler\.js$/) ) { // handler scripts are automatically preloaded by config!
-          addScript(i.replace('src/client/javascript', 'client/javascript'));
+          addScript(i.replace(/src\/client\/(.*)/, 'client/$1'));
         }
       });
       cfg.locales.forEach(function(i) {
-        addScript(i.replace('src/client/javascript', 'client/javascript'));
+        addScript(i.replace(/src\/client\/(.*)/, 'client/$1'));
       });
       cfg.stylesheets.forEach(function(i) {
-        addStyle(i.replace('src/client/stylesheets', 'client/stylesheets'));
+        addStyle(i.replace(/src\/client\/(.*)/, 'client/$1'));
       });
     }
 
@@ -798,8 +920,6 @@
     tpl = replaceAll(tpl, '%HANDLER%', cfg.handler);
 
     writeFile(_path.join(outdir, 'index.html'), tpl);
-    copyFile(_path.join(tpldir, 'favicon.png'), _path.join(outdir, 'favicon.png'));
-    copyFile(_path.join(tpldir, 'favicon.ico'), _path.join(outdir, 'favicon.ico'));
   }
 
   /////////////////////////////////////////////////////////////////////////////
@@ -830,11 +950,18 @@
    */
   function createApacheHtaccess(grunt, dist, outfile) {
     var mimes = [];
-    var mime = generateBuildConfig(grunt).mime;
+    var cfg = generateBuildConfig(grunt);
+    var proxies = [];
 
-    Object.keys(mime.mapping).forEach(function(i) {
+    Object.keys(cfg.mime.mapping).forEach(function(i) {
       if ( i.match(/^\./) ) {
-        mimes.push('  AddType ' + mime.mapping[i] + ' ' + i);
+        mimes.push('  AddType ' + cfg.mime.mapping[i] + ' ' + i);
+      }
+    });
+
+    Object.keys(cfg.server.proxies).forEach(function(k) {
+      if ( k.substr(0, 1) !== '/' && typeof cfg.server.proxies[k] === 'string' ) {
+        proxies.push('     RewriteRule ' + k + ' ' + cfg.server.proxies[k] + ' [P]');
       }
     });
 
@@ -843,6 +970,7 @@
       var dst = _path.join(ROOT, d, '.htaccess');
       var tpl = _fs.readFileSync(src).toString();
       tpl = tpl.replace(/%MIMES%/, mimes.join('\n'));
+      tpl = tpl.replace(/%PROXIES%/, proxies.join('\n'));
       writeFile(dst, tpl);
     }
 
@@ -892,6 +1020,69 @@
   /////////////////////////////////////////////////////////////////////////////
 
   /**
+   * Enable/Disable given package
+   */
+  function togglePackage(grunt, packageName, enable) {
+    var currentEnabled = getConfigPath(grunt, 'packages.ForceEnable') || [];
+    var currentDisabled = getConfigPath(grunt, 'packages.ForceDisable') || [];
+
+    var idx;
+    if ( enable ) {
+      if ( currentEnabled.indexOf(packageName) < 0 ) {
+        currentEnabled.push(packageName);
+      }
+
+      idx = currentDisabled.indexOf(packageName);
+      if ( idx >= 0 ) {
+        currentDisabled.splice(idx, 1);
+      }
+    } else {
+      idx = currentEnabled.indexOf(packageName);
+      if ( idx >= 0 ) {
+        currentEnabled.splice(idx, 1);
+      }
+
+      idx = currentDisabled.indexOf(packageName);
+      if ( idx < 0 ) {
+        currentDisabled.push(packageName);
+      }
+    }
+
+    setConfigPath(grunt, 'packages', {
+      packages: {
+        ForceEnable: currentEnabled,
+        ForceDisable: currentDisabled
+      }
+    }, true);
+  }
+
+  /**
+   * Adds repository to config
+   */
+  function addRepository(grunt, name) {
+    var current = getConfigPath(grunt, 'repositories') || [];
+    current.push(name);
+    setConfigPath(grunt, 'repositories', {repositories: current}, true);
+    return current;
+  }
+
+  /**
+   * Removes repository from config
+   */
+  function removeRepository(grunt, name) {
+    var current = getConfigPath(grunt, 'repositories') || [];
+    var found = current.indexOf(name);
+    if ( found >= 0 ) {
+      current.splice(found, 1);
+    }
+    if ( current.length === 1 && current[0] === 'default' ) {
+      current = null;
+    }
+    setConfigPath(grunt, 'repositories', {repositories: current}, true);
+    return current;
+  }
+
+  /**
    * Creates a package
    */
   function createPackage(grunt, arg, type) {
@@ -903,19 +1094,23 @@
     var typemap = {
       iframe: {
         src: 'iframe-application',
-        cpy: ['main.js', 'package.json']
+        cpy: ['main.js', 'metadata.json']
+      },
+      dummy: {
+        src: 'dummy',
+        cpy: ['main.js', 'metadata.json']
       },
       application: {
         src: 'application',
-        cpy: ['main.js', 'main.css', 'package.json', 'scheme.html']
+        cpy: ['api.js', 'main.js', 'main.css', 'metadata.json', 'scheme.html']
       },
       service: {
         src: 'service',
-        cpy: ['main.js', 'package.json']
+        cpy: ['api.js', 'main.js', 'metadata.json']
       },
       extension: {
         src: 'extension',
-        cpy: ['extension.js', 'package.json']
+        cpy: ['api.js', 'extension.js', 'metadata.json']
       }
     };
 
@@ -931,7 +1126,8 @@
     }
 
     if ( _fs.existsSync(dst) ) {
-      throw new Error('Template already exists');
+      warning(grunt, 'The package ' + name + ' already exists in repository ' + repo);
+      throw new Error('Package already exists');
     }
 
     function rep(file) {
@@ -945,6 +1141,96 @@
     typemap[type].cpy.forEach(function(c) {
       rep(_path.join(dst, c));
     });
+
+    var cfg = generateBuildConfig(grunt);
+    if ( (cfg.repositories || []).indexOf(repo) < 0 ) {
+      warning(grunt, 'The repository \'' + repo + '\' is not active.');
+      warning(grunt, 'Activate with `grunt config:add-repository' + repo);
+    }
+  }
+
+  function createHandler(grunt, name) {
+    var uname = name.replace(/[^A-z]/g, '').toLowerCase();
+
+    function createHandlerFile(src, dst) {
+      var tpl = readFile(src).toString();
+      tpl = replaceAll(tpl, 'EXAMPLE', name);
+      writeFile(dst, tpl);
+    }
+
+    mkdir(_path.join(PATHS.javascript, 'handlers', uname));
+    mkdir(_path.join(PATHS.server_php, 'handlers', uname));
+    mkdir(_path.join(PATHS.server_node, 'handlers', uname));
+
+    createHandlerFile(
+      _path.join(PATHS.templates, 'handler', 'client.js'),
+      _path.join(PATHS.javascript, 'handlers', uname, 'handler.js')
+    );
+
+    createHandlerFile(
+      _path.join(PATHS.templates, 'handler', 'php.php'),
+      _path.join(PATHS.server_php, 'handlers', uname, 'handler.php')
+    );
+
+    createHandlerFile(
+      _path.join(PATHS.templates, 'handler', 'node.js'),
+      _path.join(PATHS.server_node, 'handlers', uname, 'handler.js')
+    );
+  }
+
+  function listPackages(grunt) {
+    var packages = readPackageMetadata(grunt, null, true);
+    var epackages = readPackageMetadata(grunt, null, false);
+    var currentEnabled = getConfigPath(grunt, 'packages.ForceEnable') || [];
+    var currentDisabled = getConfigPath(grunt, 'packages.ForceDisable') || [];
+
+    function pl(str, s) {
+      if ( str.length > s ) {
+        str = str.substr(0, s - 3) + '...';
+      }
+
+      while ( str.length <= s ) {
+        str += ' ';
+      }
+
+      return str;
+    }
+
+    grunt.log.subhead('Listing all packages...');
+    Object.keys(packages).forEach(function(pn) {
+      var p = packages[pn];
+      var es = p.enabled !== false;
+      var esc = es ? 'green' : 'red';
+      var prn = pn.split('/', 2)[1];
+      if ( es ) {
+        if ( currentDisabled.indexOf(prn) !== -1 ) {
+          es = false;
+          esc = 'yellow';
+        }
+      } else {
+        if ( currentEnabled.indexOf(prn) !== -1 ) {
+          es = true;
+          esc = 'blue';
+        }
+      }
+
+      var lblenabled = (es ? 'Enabled' : 'Disabled')[esc];
+      var lblname = prn[es ? 'white' : 'grey'];
+      var lblrepo = p.repo[es ? 'white' : 'grey'];
+      var lbltype = p.type[es ? 'white' : 'grey'];
+
+      console.log(pl(lblenabled, 20), pl(lblrepo, 30), pl(lbltype, 25), lblname);
+    });
+  }
+
+  function addMountpoint(grunt, name, desc, path) {
+    var current = getConfigPath(grunt, 'client.VFS.Mountpoints') || {};
+    current[name] = {description: desc};
+    setConfigPath(grunt, 'client.VFS.Mountpoints', {client: {VFS: { Mountpoints: current}}}, true);
+
+    current = getConfigPath(grunt, 'server.vfs.mounts') || {};
+    current[name] = path;
+    setConfigPath(grunt, 'server.vfs.mounts', {server: {vfs: {mounts: current}}}, true);
   }
 
   /////////////////////////////////////////////////////////////////////////////
@@ -1012,17 +1298,31 @@
 
     grunt.log.subhead('CSS');
     writeFile(PATHS.out_client_css, buildCSS());
+  }
 
-    grunt.log.subhead('Static files');
-    writeFile(PATHS.out_client_css, buildCSS());
-
+  /**
+   * Create static files in dist/
+   */
+  function createDistFiles(grunt, dist) {
+    var cfg = generateBuildConfig(grunt);
+    var tpldir = _path.join(PATHS.templates, 'dist', cfg.dist.template);
+    var outdir = _path.join(ROOT, dist || 'dist-dev');
     var stats = cfg.statics;
+
     Object.keys(stats).forEach(function(f) {
       var src = _path.join(ROOT, f);
       var dst = _path.join(ROOT, stats[f]);
       copyFile(src, dst);
     });
 
+    var ignore = ['index.html'];
+    _fs.readdirSync(tpldir).forEach(function(iter) {
+      if ( ignore.indexOf(iter) < 0 ) {
+        copyFile(_path.join(tpldir, iter), _path.join(outdir, iter));
+      }
+    });
+
+    createIndex(grunt, null, dist);
   }
 
   /**
@@ -1058,12 +1358,20 @@
     deleteFile(PATHS.out_standalone);
     copyFile(PATHS.dist, PATHS.out_standalone);
 
+    // Create static schemes file for internals
     var tpl = readFile(_path.join(PATHS.templates, 'dist', 'schemes.js')).toString();
     tpl = tpl.replace('%JSON%', JSON.stringify(tree, null, 4));
     writeFile(PATHS.out_standalone_schemes, tpl);
 
+    // Rewrite config
     createIndex(grunt, 'standalone', 'dist');
     writeNewConfig(arg || 'standalone');
+
+    // Rewrite fonts css
+    var cfg = generateBuildConfig(grunt);
+    var srcPath = _path.join(PATHS.out_standalone, 'themes', 'fonts.css');
+    var srcFonts = readFile(srcPath).toString();
+    writeFile(srcPath, srcFonts.replace(new RegExp(cfg.client.Connection.FontURI, 'g'), 'fonts'));
 
     if ( arg === 'nw' ) {
       // Initials
@@ -1080,8 +1388,8 @@
         _path.join(PATHS.out_standalone, 'package.json')
       );
       copyFile(
-        _path.join(PATHS.conf, '130-mime.json'),
-        _path.join(PATHS.out_standalone, 'mime.json')
+        _path.join(PATHS.server, 'packages.json'),
+        _path.join(PATHS.out_standalone, 'packages.json')
       );
 
       // Install dependencies
@@ -1105,16 +1413,13 @@
   /**
    * Builds packages
    */
-  function buildPackages(grunt, arg) {
-    function copyFiles(src, dst, p, list) {
+  function buildPackages(grunt, onfinished, arg) {
+    function copyFiles(src, dst, p, list, additions) {
       list = list || [];
+      additions = additions || [];
 
-      deleteFile(dst);
-
-      if ( list.length ) {
-        mkdir(dst);
-
-        list.forEach(function(f) {
+      function _copyList(lst) {
+        lst.forEach(function(f) {
           try {
             mkdir(_path.join(dst, _path.dirname(f)));
           } catch ( e ) {}
@@ -1125,10 +1430,19 @@
             error(e);
           }
         });
+      }
+
+      deleteFile(dst);
+
+      if ( list.length ) {
+        mkdir(dst);
+        _copyList(list);
       } else {
         mkdir(_path.dirname(dst));
         copyFile(src, dst);
       }
+
+      _copyList(additions);
     }
 
     function combineFiles(src, dst, p, iter) {
@@ -1141,14 +1455,13 @@
       var remove = [];
 
       (iter.preload || []).forEach(function(p) {
-        var path = _path.join(src, p.src);
-
-        if ( p.combine === false ) {
+        if ( p.combine === false || p.src.match(/^(ftp|https?\:)?\/\//) ) {
           pre.push(p);
           return;
         }
 
         try {
+          var path = _path.join(src, p.src);
           if ( p.type === 'javascript' ) {
             combined.js.push(readFile(path).toString());
           } else if ( p.type === 'stylesheet' ) {
@@ -1175,31 +1488,108 @@
 
       writeFile(_path.join(dst, 'combined.js'), combined.js.join('\n'));
       writeFile(_path.join(dst, 'combined.css'), combined.css.join('\n'));
-      writeFile(_path.join(dst, 'package.json'), JSON.stringify(iter, null, 2));
+      writeFile(_path.join(dst, 'metadata.json'), JSON.stringify(iter, null, 2));
 
       remove.forEach(function(r) {
         deleteFile(r);
       });
     }
 
-    var packages = readPackageMetadata(grunt);
-    Object.keys(packages).forEach(function(p) {
-      if ( arg && arg !== p ) {
-        return;
+    function compileLess(root, files, done) {
+      files = files || {};
+
+      var additions = [];
+
+      aQueue(Object.keys(files), function(ln, next) {
+        var dest = _path.join(root, files[ln]);
+        var src = _path.join(root, ln);
+
+        console.log('CSS', src.replace(ROOT, ''), '=>', dest.replace(ROOT, ''));
+
+        try {
+          var data = readFile(src).toString();
+          _less.render(data, {
+            sourceMap: {},
+            paths: ['.', PATHS.themes, PATHS.stylesheets]
+          }).then(function(result) {
+            writeFile(dest, result.css);
+            writeFile(dest + '.map', result.map);
+
+            additions.push(files[ln]);
+            additions.push(files[ln] + '.map');
+
+            next();
+          }, function(error) {
+            console.warn(error);
+            next();
+          });
+        } catch ( e ) {
+          console.warn(error, error.stack);
+          next();
+        }
+      }, function() {
+        done(additions);
+      });
+    }
+
+    function runPackageScript(type, pn, cmd, src, dst, cb) {
+      if ( cmd ) {
+        console.log('CMD', type + '@' + pn, '$', cmd);
+        require('child_process').exec(cmd, {cwd: src}, function(err, stdout, stderr) {
+          if ( grunt.option('verbose') ) {
+            console.log(stdout);
+          }
+          if ( stderr ) {
+            console.error(stderr);
+          }
+
+          cb();
+        });
+      } else {
+        cb();
       }
+    }
+
+    var packages = readPackageMetadata(grunt);
+    aQueue(Object.keys(packages), function(p, next) {
+      if ( arg && arg !== p ) {
+        return next();
+      }
+
       grunt.log.subhead(p);
 
       var iter = packages[p];
       var src = _path.join(PATHS.packages, p);
       var dst = _path.join(PATHS.out_client_packages, p);
+      var scripts = iter.build.scripts || {};
 
-      copyFiles(src, dst, p, iter.build.copy);
+      function _compile() {
+        var copy = iter.build.copy || [];
 
-      if ( iter.type === 'extension' ) {
-        return;
+        function _proceed(additions) {
+          additions = additions.filter(function(iter) {
+            return copy.indexOf(iter) < 0;
+          });
+
+          copyFiles(src, dst, p, copy, additions);
+
+          if ( iter.type !== 'extension' ) {
+            combineFiles(src, dst, p, iter);
+          }
+
+          aQueue(scripts.after || [], function(cmd, nxt) {
+            runPackageScript('after', p, cmd, src, dst, nxt);
+          }, next);
+        }
+
+        compileLess(src, iter.build.less, _proceed);
       }
 
-      combineFiles(src, dst, p, iter);
+      aQueue(scripts.before || [], function(cmd, nxt) {
+        runPackageScript('before', p, cmd, src, dst, nxt);
+      }, _compile);
+    }, function() {
+      onfinished();
     });
   }
 
@@ -1220,8 +1610,15 @@
                  _path.join(PATHS.dist, 'themes', 'fonts', i));
 
         var path = _path.join(PATHS.fonts, i, 'style.css');
-        styles.push(readFile(path).toString());
+        var rout = readFile(path).toString();
+        var rep = cfg.client.Connection.FontURI;
+        if ( !rep.match(/^\//) ) { // Fix for relative paths (CSS)
+          rep = rep.replace(/^\w+\//, '');
+        }
+        rout = rout.replace(/\%FONTURI\%/g, rep);
+        styles.push(rout);
       });
+
       writeFile(PATHS.out_client_fontcss, styles.join('\n'));
     }
 
@@ -1249,7 +1646,7 @@
         var src  = _path.join(PATHS.styles, s.name, 'style.less');
         var dest = _path.join(PATHS.out_client_styles, s.name + '.css');
 
-        lessFile(src, dest, function(error) {
+        lessFile(src, dest, cfg, function(error) {
           if ( error ) {
             grunt.fail.warn(error);
             return;
@@ -1269,16 +1666,36 @@
       copyFile(_path.join(PATHS.themes, 'wallpapers'),
                _path.join(PATHS.dist, 'themes', 'wallpapers'));
 
-      mkdir(_path.join(PATHS.dist, 'themes', 'icons'));
-      cfg.themes.icons.forEach(function(i) {
-        copyFile(_path.join(PATHS.themes, 'icons', i),
-                 _path.join(PATHS.dist, 'themes', 'icons', i));
-      });
-
       mkdir(_path.join(PATHS.dist, 'themes', 'sounds'));
       cfg.themes.sounds.forEach(function(i) {
         copyFile(_path.join(PATHS.themes, 'sounds', i),
                  _path.join(PATHS.dist, 'themes', 'sounds', i));
+      });
+    }
+
+    function buildIcons() {
+      grunt.log.subhead('Icon packs');
+
+      mkdir(_path.join(PATHS.dist, 'themes', 'icons'));
+
+      cfg.themes.icons.forEach(function(i) {
+        grunt.log.subhead(i + ':');
+
+        var src = _path.join(PATHS.themes, 'icons', i);
+        var dst = _path.join(PATHS.dist, 'themes', 'icons', i);
+        var met = {};
+
+        try {
+          met = JSON.parse(readFile(_path.join(src, 'metadata.json')));
+        } catch ( e ) {}
+
+        if ( met && met.parent ) {
+          console.log('+++', 'Uses parent theme', met.parent);
+          var psrc = _path.join(PATHS.themes, 'icons', met.parent);
+          copyFile(psrc, dst);
+        }
+
+        copyFile(src, dst);
       });
     }
 
@@ -1308,9 +1725,13 @@
     if ( !arg || arg === 'all' ) {
       buildFonts();
       buildStatic();
+      buildIcons();
       buildStyles(null, done);
       return;
+    } else if ( arg === 'icons' ) {
+      buildIcons();
     } else if ( arg === 'resources' ) {
+      buildIcons();
       buildStatic();
     } else if ( arg === 'fonts' ) {
       buildFonts();
@@ -1341,7 +1762,7 @@
             var pcss = false;
             var pjs  = false;
             manifest.preload.forEach(function(p) {
-              if ( p.combine === false ) {
+              if ( p.combine === false || p.src.match(/^(ftp|https?\:)?\/\//) ) {
                 preload.push(p);
                 return;
               }
@@ -1405,48 +1826,42 @@
 
     generate(PATHS.out_client_manifest, 'dist');
     generate(PATHS.out_client_dev_manifest, 'dist-dev');
-  }
 
-  /**
-   * Creates a nightly build
-   */
-  function buildNightly(grunt, arg) {
-    var list = [
-      'packages/default',
-      'themes',
-      'vendor',
-      'blank.css',
-      'favicon.ico',
-      'favicon.png',
-      'index.html',
-      'osjs.css',
-      'osjs.js',
-      'locales.js',
-      'schemes.js',
-      'osjs-logo.png',
-      'packages.js',
-      'settings.js'
-    ];
-
-    var dest = _path.join(ROOT, '.nightly');
-    mkdir(_path.join(dest, 'themes'));
-    mkdir(_path.join(dest, 'vendor'));
-    mkdir(_path.join(dest, 'packages'));
-    mkdir(_path.join(dest, 'packages', 'default'));
-    copyFile(_path.join(ROOT, 'CHANGELOG.md'), _path.join(dest, 'CHANGELOG.md'));
-    copyFile(_path.join(ROOT, 'README.md'), _path.join(dest, 'README.md'));
-    copyFile(_path.join(ROOT, 'LICENSE'), _path.join(dest, 'LICENSE'));
-    copyFile(_path.join(ROOT, 'AUTHORS'), _path.join(dest, 'AUTHORS'));
-
-    list.forEach(function(src) {
-      copyFile(_path.join(PATHS.dist, src), _path.join(dest, src));
+    var packages = readPackageMetadata(grunt);
+    var pout = {};
+    Object.keys(packages).forEach(function(k) {
+      pout[k] = packages[k];
     });
+    writeFile(PATHS.out_server_manifest, JSON.stringify(pout, null, 4));
   }
 
   /**
    * Creates a compressed build
    */
   function buildCompressed(grunt, arg) {
+
+    // Compress Core
+    grunt.log.subhead('Writing core javascript');
+    writeFile(PATHS.out_client_js.replace(/\.js$/, '.min.js'), _ugly.minify(PATHS.out_client_js, {comments: true}).code);
+
+    grunt.log.subhead('Writing core stylesheet');
+    writeFile(PATHS.out_client_css.replace(/\.css$/, '.min.css'), new Cleancss().minify(readFile(PATHS.out_client_css)).styles);
+
+    grunt.log.subhead('Writing settings');
+    writeFile(PATHS.out_client_config.replace(/\.js$/, '.min.js'), _ugly.minify(PATHS.out_client_config, {comments: true}).code);
+
+    grunt.log.subhead('Writing locales');
+    writeFile(PATHS.out_client_locale.replace(/\.js$/, '.min.js'), _ugly.minify(PATHS.out_client_locale, {comments: true}).code);
+
+    grunt.log.subhead('Writing index.html');
+    var orig = readFile(_path.join(PATHS.dist, 'index.html')).toString();
+    orig = orig.replace('"osjs.js"', '"osjs.min.js"');
+    orig = orig.replace('"osjs.css"', '"osjs.min.css"');
+    orig = orig.replace('"locales.js"', '"locales.min.js"');
+    orig = orig.replace('"settings.js"', '"settings.min.js"');
+    writeFile(_path.join(PATHS.dist, 'index.html'), orig);
+
+    // Compress Packages
     var packages = readPackageMetadata(grunt, PATHS.out_client_packages);
 
     Object.keys(packages).forEach(function(p) {
@@ -1479,16 +1894,17 @@
           if ( basename && newname && minified ) {
             writeFile(_path.join(PATHS.out_client_packages, p, newname), minified);
             iter.preload[idx].src = _path.join(p, pl.src.replace(_path.basename(pl.src), newname));
-            writeFile(_path.join(PATHS.out_client_packages, p, 'package.json'), JSON.stringify(iter, null, 2));
+            writeFile(_path.join(PATHS.out_client_packages, p, 'metadata.json'), JSON.stringify(iter, null, 2));
           }
         });
       }
     });
 
     grunt.log.subhead('Writing metadata...');
-    var tpl = readFile(_path.join(PATHS.templates, 'packages.js')).toString();
+    var tpl = readFile(_path.join(PATHS.templates, 'dist', 'packages.js')).toString();
     var content = tpl.replace('%PACKAGES%', JSON.stringify(normalizeManifest(packages), null, 2));
     writeFile(PATHS.out_client_manifest, content);
+    writeFile(PATHS.out_client_manifest.replace(/\.js$/, '.min.js'), _ugly.minify(PATHS.out_client_manifest, {comments: true}).code);
   }
 
   /////////////////////////////////////////////////////////////////////////////
@@ -1497,31 +1913,35 @@
 
   module.exports = {
     createConfigurationFiles: createConfigurationFiles,
-    createIndex:              createIndex,
+    createDistFiles:          createDistFiles,
     createApacheVhost:        createApacheVhost,
     createApacheHtaccess:     createApacheHtaccess,
     createLighttpdConfig:     createLighttpdConfig,
     createNginxConfig:        createNginxConfig,
     createPackage:            createPackage,
+    createHandler:            createHandler,
 
     getConfig: generateBuildConfig,
     getConfigPath: getConfigPath,
     setConfigPath: setConfigPath,
     addPreload: addPreload,
 
+    togglePackage: togglePackage,
+    addRepository: addRepository,
+    removeRepository: removeRepository,
+    listPackages: listPackages,
+    addMountpoint: addMountpoint,
+
     buildCore:        buildCore,
     buildStandalone:  buildStandalone,
     buildPackages:    buildPackages,
     buildThemes:      buildThemes,
     buildManifest:    buildManifest,
-    buildNightly:     buildNightly,
     buildCompressed:  buildCompressed
   };
 
 })(
   require('path'),
   require('node-fs-extra'),
-  require('less'),
-  require('uglify-js'),
-  require('clean-css')
+  require('less')
 );

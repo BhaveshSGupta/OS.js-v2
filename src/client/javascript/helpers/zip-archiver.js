@@ -31,8 +31,10 @@
 (function(Utils, API, VFS) {
   'use strict';
 
-  var OSjs = window.OSjs = window.OSjs || {};
-  OSjs.Helpers = OSjs.Helpers || {};
+  /**
+   * @namespace ZipArchiver
+   * @memberof OSjs.Helpers
+   */
 
   var requestFileSystem = window.webkitRequestFileSystem || window.mozRequestFileSystem || window.requestFileSystem;
   var URL = window.webkitURL || window.mozURL || window.URL;
@@ -40,10 +42,10 @@
   function getEntries(file, callback) {
     zip.createReader(new zip.BlobReader(file), function(zipReader) {
       zipReader.getEntries(function(entries) {
-        callback(entries);
+        callback(false, entries);
       });
     }, function(message) {
-      alert(message); // FIXME
+      callback(message);
     });
   }
 
@@ -55,6 +57,86 @@
     }, onprogress);
   }
 
+  function openFile(file, done) {
+    console.log('-->', 'openFile()');
+
+    VFS.download(file, function(error, data) {
+      if ( error ) {
+        console.warning('An error while opening zip', error);
+        done(error);
+        return;
+      }
+
+      var blob = new Blob([data], {type: file.mime});
+      getEntries(blob, function(error, result) {
+        done(error, result || []);
+      });
+    });
+  }
+
+  function importFiles(writer, entries, pr, done, ignore) {
+    ignore = ignore || [];
+
+    console.log('-->', 'importFiles()', entries);
+
+    function _next(index) {
+      if ( !entries.length || index >= entries.length ) {
+        done(false);
+        return;
+      }
+
+      var current = entries[index];
+      if ( ignore.indexOf(current.filename) >= 0 ) {
+        console.warn('Ignoring', index, current);
+        pr('ignored', index, current);
+        _next(index + 1);
+        return;
+      }
+
+      console.log('Importing', index, current);
+
+      getEntryFile(current, function(blob) {
+        writer.add(current.filename, new zip.BlobReader(blob), function() {
+          pr('added', index, current);
+          _next(index + 1);
+        }, function(current, total) {
+          pr('reading', index, total, current);
+        }, {
+          directory: current.directory,
+          lastModDate: current.lastModDate,
+          version: current.version
+        });
+      });
+    }
+
+    _next(0);
+  }
+
+  function createZip(done) {
+    console.log('-->', 'createZip()');
+
+    var writer = new zip.BlobWriter();
+    zip.createWriter(writer, function(writer) {
+      done(false, writer);
+    }, function(error) {
+      done(error);
+    });
+  }
+
+  function saveZip(writer, file, ccb) {
+    console.log('-->', 'saveZip()');
+
+    writer.close(function(blob) {
+      VFS.upload({
+        destination: Utils.dirname(file.path),
+        files: [{filename: Utils.filename(file.path), data: blob}]
+      }, function(type, ev) {
+        var error = (type === 'error') ? ev : false;
+        ccb(error, !!error);
+      }, {overwrite: true});
+    });
+  }
+
   /////////////////////////////////////////////////////////////////////////////
   // API
   /////////////////////////////////////////////////////////////////////////////
@@ -64,17 +146,22 @@
   /**
    * The GoogleAPI wrapper class
    *
+   * <pre><b>
    * This is a private class and can only be aquired through
    * OSjs.Helpers.ZipArchiver.createInsatance()
    *
    * Generally you want to create an instance of this helper
    * and when successfully created use `window.zip` use the instance helpers.
+   * </b></pre>
    *
-   * @see OSjs.Helpers.ZipArchiver.createInsatance()
-   * @api OSjs.Helpers.ZipArchiver.ZipArchiver
+   * @summary Helper for handling ZIP files.
    *
-   * @private
-   * @class
+   * @example
+   * OSjs.Helpers.ZipArchiver.createInstance({}, (err, instance) => {});
+   *
+   * @constructor Class
+   * @memberof OSjs.Helpers.ZipArchiver
+   * @see OSjs.Helpers.ZipArchiver.createInsatance
    */
   function ZipArchiver(opts) {
     this.opts = opts;
@@ -96,7 +183,7 @@
     var self = this;
     Utils.preload(this.preloads, function(total, failed) {
       if ( failed.length ) {
-        cb('Failed to load zip.js', failed); // FIXME: Translation
+        cb(API._('ZIP_PRELOAD_FAIL'), failed);
         return;
       }
 
@@ -113,11 +200,11 @@
   /**
    * Lists contents of a ZIP file
    *
-   * @param   OSjs.VFS.File     file          File to extract
-   * @param   Function          cb            Callback function => fn(error, entries)
+   * @function list
+   * @memberof OSjs.Helpers.ZipArchiver.Class#
    *
-   * @return  void
-   * @method  ZipArchiver::list()
+   * @param   {OSjs.VFS.File}     file          File to extract
+   * @param   {Function}          cb            Callback function => fn(error, entries)
    */
   ZipArchiver.prototype.list = function(file, cb) {
     VFS.download(file, function(error, result) {
@@ -129,8 +216,8 @@
       }
 
       var blob = new Blob([result], {type: 'application/zip'});
-      getEntries(blob, function(entries) {
-        cb(false, entries);
+      getEntries(blob, function(error, entries) {
+        cb(error, entries);
       });
     });
   };
@@ -138,13 +225,14 @@
   /**
    * Create a new blank ZIP file
    *
-   * @param   OSjs.VFS.File     file          File to extract
-   * @param   Function          cb            Callback function => fn(error)
+   * @function create
+   * @memberof OSjs.Helpers.ZipArchiver.Class#
    *
-   * @return  void
-   * @method  ZipArchiver::create()
+   * @param   {OSjs.VFS.File}               file          File to extract
+   * @param   {Function}                    cb            Callback function => fn(error)
+   * @param   {OSjs.Core.Application}       [appRef]      Application reference
    */
-  ZipArchiver.prototype.create = function(file, cb) {
+  ZipArchiver.prototype.create = function(file, cb, appRef) {
     var writer = new zip.BlobWriter();
     zip.createWriter(writer, function(writer) {
       writer.close(function(blob) {
@@ -159,6 +247,10 @@
           }
           writer = null;
 
+          if ( type !== 'error' ) {
+            API.message('vfs:upload', file, {source: appRef ? appRef.__pid : null});
+          }
+
           cb(type === 'error' ? ev : false, type !== 'error');
         }, {overwrite: true});
       });
@@ -168,18 +260,16 @@
   /**
    * Add a entry to the ZIP file
    *
-   * TODO: Adding directory does not actually add files inside dirs yet
+   * @function add
+   * @memberof OSjs.Helpers.ZipArchiver.Class#
+   * @TODO Adding directory does not actually add files inside dirs yet
    *
-   * @param   OSjs.VFS.File     file          Archive File
-   * @param   OSjs.VFS.File     add           File to add
-   * @param   Object            args          Arguments
-   *
-   * @option  args    String      path            Root path to add to (default='/')
-   * @option  args    Function    onprogress      Callback on progress => fn(state[, args, ...])
-   * @option  args    Function    oncomplete      Callback on complete => fn(error, result)
-   *
-   * @return  void
-   * @method  ZipArchiver::add()
+   * @param   {OSjs.VFS.File}     file                Archive File
+   * @param   {OSjs.VFS.File}     add                 File to add
+   * @param   {Object}            args                Arguments
+   * @param   {String}            [args.path=/]       Root path to add to
+   * @param   {Function}          args.onprogress     Callback on progress => fn(state[, args, ...])
+   * @param   {Function}          args.oncomplete     Callback on complete => fn(error, result)
    */
   ZipArchiver.prototype.add = function(file, add, args) {
     var cb = args.oncomplete || function() {};
@@ -193,23 +283,6 @@
     function finished(err, res) {
       console.groupEnd();
       cb(err, res);
-    }
-
-    function openFile(done) {
-      console.log('-->', 'openFile()');
-
-      VFS.download(file, function(error, data) {
-        if ( error ) {
-          console.warning('An error while opening zip', error);
-          done(error);
-          return;
-        }
-
-        var blob = new Blob([data], {type: add.mime});
-        getEntries(blob, function(result) {
-          done(false, result || []);
-        });
-      });
     }
 
     function checkIfExists(entries, done) {
@@ -230,45 +303,6 @@
       done(found ? 'File is already in archive' : false);
     }
 
-    function createZip(done) {
-      console.log('-->', 'createZip()');
-
-      var writer = new zip.BlobWriter();
-      zip.createWriter(writer, function(writer) {
-        done(false, writer);
-      }, function(error) {
-        done(error);
-      });
-    }
-
-    function importFiles(writer, entries, done) {
-      console.log('-->', 'importFiles()', entries);
-
-      function _next(index) {
-        if ( !entries.length || index >= entries.length ) {
-          done(false);
-          return;
-        }
-
-        var current = entries[index];
-        console.log('Importing', index, current);
-        getEntryFile(current, function(blob) {
-          writer.add(current.filename, new zip.BlobReader(blob), function() {
-            pr('added', index, current);
-            _next(index + 1);
-          }, function(current, total) {
-            pr('reading', index, total, current);
-          }, {
-            directory: current.directory,
-            lastModDate: current.lastModDate,
-            version: current.version
-          });
-        });
-      }
-
-      _next(0);
-    }
-
     function addFile(writer, done) {
       var filename = add instanceof window.File ? add.name : add.filename;
       var type = add instanceof window.File ? 'file' : (add.type || 'file');
@@ -277,27 +311,13 @@
 
       filename = ((currentDir || '/').replace(/\/$/, '') + '/' + filename).replace(/^\//, '');
 
-      function _saveChanges(ccb) {
-        console.log('-->', 'addFile()', '-->', '_saveChanges()');
-
-        writer.close(function(blob) {
-          VFS.upload({
-            destination: Utils.dirname(file.path),
-            files: [{filename: Utils.filename(file.path), data: blob}]
-          }, function(type, ev) {
-            var error = (type === 'error') ? ev : false;
-            ccb(error, !!error);
-          }, {overwrite: true});
-        });
-      }
-
       function _addBlob(blob) {
         console.log('-->', 'addFile()', '-->', '_addBlob()');
 
         writer.add(filename, new zip.BlobReader(blob), function() {
           console.log('ADDED FILE', filename);
 
-          _saveChanges(done);
+          saveZip(writer, file, done);
         }, function(current, total) {
           pr('compressing', current);
         });
@@ -308,7 +328,7 @@
         writer.add(filename, null, function() {
           console.log('ADDED FOLDER', filename);
 
-          _saveChanges(done);
+          saveZip(writer, file, done);
         }, null, {directory: true});
       }
 
@@ -332,7 +352,7 @@
     }
 
     // Proceed!
-    openFile(function(err, entries) {
+    openFile(file, function(err, entries) {
       if ( err ) {
         finished(err); return;
       }
@@ -347,7 +367,7 @@
             finished(err); return;
           }
 
-          importFiles(writer, entries, function(err) {
+          importFiles(writer, entries, pr, function(err) {
             if ( err ) {
               finished(err); return;
             }
@@ -364,31 +384,67 @@
   /**
    * Removes an entry from ZIP file
    *
-   * TODO
+   * @function remove
+   * @memberof OSjs.Helpers.ZipArchiver.Class#
    *
-   * @param   OSjs.VFS.File     file          Archive File
-   * @param   String            path          Path
-   * @param   Function          cb            Callback function => fn(err, result)
-   *
-   * @return  void
-   * @method  ZipArchiver::remove()
+   * @param   {OSjs.VFS.File}     file          Archive File
+   * @param   {String}            path          Path
+   * @param   {Function}          cb            Callback function => fn(err, result)
    */
   ZipArchiver.prototype.remove = function(file, path, cb) {
-    cb('Not implemented yet');
+
+    console.group('ZipArchiver::remove()');
+    console.log('Archive', file);
+    console.log('Remove', path);
+
+    function finished(err, res, writer) {
+      if ( err || !writer ) {
+        console.groupEnd();
+        cb(err || API._('ZIP_NO_RESOURCE'));
+        return;
+      }
+
+      saveZip(writer, file, function(eer, rees) {
+        console.groupEnd();
+        cb(eer, rees);
+      });
+    }
+
+    if ( !path ) {
+      finished(API._('ZIP_NO_PATH'));
+      return;
+    }
+
+    openFile(file, function(err, entries) {
+      if ( err ) {
+        finished(err); return;
+      }
+
+      createZip(function(err, writer) {
+        if ( err ) {
+          finished(err); return;
+        }
+
+        importFiles(writer, entries, function() {
+        }, function(err) {
+          finished(err, !!err, writer);
+        }, [path]);
+      });
+    });
   };
 
   /**
    * Extract a File to destination
    *
-   * @param   OSjs.VFS.File     file          File to extract
-   * @param   String            destination   Destination path
-   * @param   Object            args          Arguments
+   * @function extract
+   * @memberof OSjs.Helpers.ZipArchiver.Class#
    *
-   * @option  args    Function    onprogress      Callback on progress => fn(filename, currentIndex, totalIndex)
-   * @option  args    Function    oncomplete      Callback on complete => fn(error, warnings, result)
-   *
-   * @return  void
-   * @method  ZipArchiver::extract()
+   * @param   {OSjs.VFS.File}         file                 File to extract
+   * @param   {String}                destination          Destination path
+   * @param   {Object}                args                 Arguments
+   * @param   {Function}              args.onprogress      Callback on progress => fn(filename, currentIndex, totalIndex)
+   * @param   {Function}              args.oncomplete      Callback on complete => fn(error, warnings, result)
+   * @param   {OSjs.Core.Application} [args.app]           Application reference
    */
   ZipArchiver.prototype.extract = function(file, destination, args) {
     args = args || {};
@@ -401,6 +457,10 @@
     console.log('Destination', destination);
 
     function finished(error, warnings, result) {
+      if ( !error ) {
+        API.message('vfs:update', destination, {source: args.app ? args.app.__pid : null});
+      }
+
       console.groupEnd();
       args.oncomplete(error, warnings, result);
     }
@@ -487,7 +547,15 @@
 
       var dst = new VFS.File({path: destination, type: 'dir'});
       VFS.mkdir(dst, function(error, result) {
+        if ( error ) {
+          console.warn('ZipArchiver::extract()', '_checkDirectory()', 'VFS::mkdir()', error);
+        }
+
         VFS.exists(dst, function(err, result) {
+          if ( err ) {
+            console.warn('ZipArchiver::extract()', '_checkDirectory()', 'VFS::exists()', err);
+          }
+
           if ( result ) {
             cb(false);
           } else {
@@ -513,7 +581,12 @@
           return;
         }
 
-        getEntries(blob, function(entries) {
+        getEntries(blob, function(error, entries) {
+          if ( error ) {
+            finished(error, warnings, false);
+            return;
+          }
+
           _extractList(entries, destination);
         });
       });
@@ -529,9 +602,10 @@
   /**
    * Gets the currently running instance
    *
-   * @api OSjs.Helpers.ZipArchiver.getInstance()
+   * @function getInstance
+   * @memberof OSjs.Helpers.ZipArchiver
    *
-   * @return  ZipArchiver       Can also be null
+   * @return  {OSjs.Helpers.ZipArchiver.Class}       Can also be null
    */
   OSjs.Helpers.ZipArchiver.getInstance = function() {
     return SingletonInstance;
@@ -540,14 +614,11 @@
   /**
    * Create an instance of ZipArchiver
    *
-   * @param   Object    args      Arguments
-   * @param   Function  callback  Callback function => fn(error, instance)
+   * @function createInstance
+   * @memberof OSjs.Helpers.ZipArchiver
    *
-   * @option  args    Array     scope     What scope to load
-   *
-   * @api OSjs.Helpers.ZipArchiver.createInstance()
-   *
-   * @return  void
+   * @param   {Object}    args      Arguments
+   * @param   {Function}  callback  Callback function => fn(error, instance)
    */
   OSjs.Helpers.ZipArchiver.createInstance = function(args, callback) {
     args = args || {};
@@ -558,7 +629,7 @@
     SingletonInstance.init(function(error) {
       if ( !error ) {
         if ( !window.zip ) {
-          error = 'zip.js library was not found. Did it load properly?'; // FIXME: Translation
+          error = API._('ZIP_VENDOR_FAIL');
         }
       }
       callback(error, error ? false : SingletonInstance);

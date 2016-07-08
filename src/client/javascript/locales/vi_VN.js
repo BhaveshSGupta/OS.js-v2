@@ -31,8 +31,6 @@
   // jscs:disable validateQuoteMarks
   'use strict';
 
-  OSjs.Locales = OSjs.Locales || {};
-
   OSjs.Locales.vi_VN = {
     //
     // CORE
@@ -66,6 +64,11 @@
     'ERR_APP_MISSING_ARGUMENT_FMT': 'Thiếu đối số: {0}',
     'ERR_APP_UNKNOWN_ERROR'       : 'Lỗi không xác định',
 
+    'ERR_OPERATION_TIMEOUT'       : 'Hết thời gian phản hồi',
+    'ERR_OPERATION_TIMEOUT_FMT'   : 'Hết thời gian phản hồi trong ({0})',
+
+    'ERR_ARGUMENT_FMT'    : '\'{0}\' dự kiến \'{1}\' là một \'{2}\',cho \'{3}\'',
+
     // Window
     'ERR_WIN_DUPLICATE_FMT' : 'Bạn đã có một cửa sổ có tên \'{0}\'',
     'WINDOW_MINIMIZE' : 'Giảm thiểu',
@@ -78,9 +81,11 @@
     // Handler
     'TITLE_SIGN_OUT' : 'Đăng xuất',
     'TITLE_SIGNED_IN_AS_FMT' : 'Đăng nhập như: {0}',
+    'ERR_LOGIN_FMT' : 'Đăng nhập thất bại: {0}',
+    'ERR_LOGIN_INVALID' : 'Đăng nhập không hợp lệ',
 
     // Service
-    'BUGREPORT_MSG' : 'Xin báo lỗi này nếu bạn nghĩ rằng đây là một bug.\nBao gồm một mô tả ngắn gọn về các lỗi xảy ra như thế nào, và nếu có thể; làm thế nào để làm lại nó',
+    'BUGREPORT_MSG' : 'Xin hãy báo lỗi này nếu bạn nghĩ rằng đây là một lỗi.\nHãy viết một mô tả ngắn gọn về lỗi đã xảy ra như thế nào, và nếu có thể, làm cách nào để tái hiện lại nó!',
 
     // API
     'SERVICENOTIFICATION_TOOLTIP' : 'Đăng nhập vào các dịch vụ bên ngoài: {0}',
@@ -126,6 +131,7 @@
     'DIALOG_FILE_MNU_ICONVIEW' : 'Biểu tượng',
     'DIALOG_FILE_ERROR'        : 'Lỗi FileDialog',
     'DIALOG_FILE_ERROR_SCANDIR': 'Không thể liệt kê thư mục \'{0}\' vì đã xảy ra lỗi',
+    'DIALOG_FILE_ERROR_FIND': 'Không thể tìm kiếm trong thư mục \'{0}\' bởi một lỗi đã xảy ra',
     'DIALOG_FILE_MISSING_FILENAME' : 'Bạn cần phải chọn một tập tin hoặc nhập tên tập tin mới!',
     'DIALOG_FILE_MISSING_SELECTION': 'Bạn cần phải chọn một tập tin!',
 
@@ -201,6 +207,20 @@
     'ERR_VFS_DOWNLOAD_NO_FILE': 'Không thể tải về một đường dẫn mà không có một đường dẫn',
     'ERR_VFS_DOWNLOAD_FAILED' : 'Một lỗi đã xảy ra trong khi tải về: {0}',
     'ERR_VFS_REMOTEREAD_EMPTY': 'Trả lời là rỗng',
+
+    'ERR_VFSMODULE_EXCEPTION'          : 'Lỗi mô-đun VFS',
+    'ERR_VFSMODULE_EXCEPTION_FMT'      : 'Lỗi mô-đun VFS: {0}',
+    'ERR_VFSMODULE_INVALID_METHOD'     : 'Sai phương thức VFS',
+    'ERR_VFSMODULE_INVALID_METHOD_FMT' : 'Sai phương thức VFS: {0}',
+    'ERR_VFSMODULE_INVALID_TYPE'       : 'Sai kiểu mô-đun VFS',
+    'ERR_VFSMODULE_INVALID_TYPE_FMT'   : 'Sai kiểu mô-đun VFS: {0}',
+    'ERR_VFSMODULE_INVALID_CONFIG'     : 'Sai thiết lập mô-đun VFS',
+    'ERR_VFSMODULE_INVALID_CONFIG_FMT' : 'Sai thiết lập mô-đun VFS: {0}',
+    'ERR_VFSMODULE_ALREADY_MOUNTED'    : 'Mô-đun VFS đã được gắn',
+    'ERR_VFSMODULE_ALREADY_MOUNTED_FMT': 'Mô-đun VFS \'{0}\' đã được gắn',
+    'ERR_VFSMODULE_NOT_MOUNTED'        : 'Mô-đun VFS chưa được gắn',
+    'ERR_VFSMODULE_NOT_MOUNTED_FMT'    : 'Mô-đun VFS \'{0}\' chưa được gắn',
+
     'TOOLTIP_VFS_DOWNLOAD_NOTIFICATION': 'Đang tải xuống tập tin',
 
     'ERR_VFSMODULE_XHR_ERROR'      : 'Lỗi XHR',
@@ -209,7 +229,7 @@
     'ERR_VFSMODULE_PARENT'         : 'Không có thư mục cha nào như vậy',
     'ERR_VFSMODULE_PARENT_FMT'     : 'Không thể tìm thư mục cha : {0}',
     'ERR_VFSMODULE_SCANDIR'        : 'Không thể quét thư mục',
-    'ERR_VFSMODULE_SCANDIR_FMT'    : 'Failed to scan directory: {0}',
+    'ERR_VFSMODULE_SCANDIR_FMT'    : 'Không thể quét thư mục: {0}',
     'ERR_VFSMODULE_READ'           : 'Không thể đọc tập tin',
     'ERR_VFSMODULE_READ_FMT'       : 'Không thể đọc tập tin: {0}',
     'ERR_VFSMODULE_WRITE'          : 'Không thể ghi tập tin',
@@ -234,6 +254,10 @@
     'ERR_VFSMODULE_UNTRASH_FMT'    : 'Không thể di chuyển tập tin ra khỏi thùng rác: {0}',
     'ERR_VFSMODULE_EMPTYTRASH'     : 'Không thể làm rỗng thùng rác',
     'ERR_VFSMODULE_EMPTYTRASH_FMT' : 'Không thể làm rỗng thùng rác : {0}',
+    'ERR_VFSMODULE_FIND'           : 'Không thể tìm kiếm',
+    'ERR_VFSMODULE_FIND_FMT'       : 'Lỗi khi tìm kiếm: {0}',
+    'ERR_VFSMODULE_FREESPACE'      : 'Không thể làm sạch bộ nhớ',
+    'ERR_VFSMODULE_FREESPACE_FMT'  : 'Lỗi khi làm sạch bộ nhớ: {0}',
 
     // VFS -> Dropbox
     'DROPBOX_NOTIFICATION_TITLE' : 'Bạn đã đăng nhập vào Dropbox API',
@@ -241,6 +265,18 @@
 
     // VFS -> OneDrive
     'ONEDRIVE_ERR_RESOLVE'      : 'Không thể giải quyết đường dẫn: mục không tìm thấy',
+
+    // ZIP
+    'ZIP_PRELOAD_FAIL'  : 'Không thể tải zip.js',
+    'ZIP_VENDOR_FAIL'   : 'Không tìm thấy zip.js, bạn có chắc chắn đã thiết lập nó chưa?',
+    'ZIP_NO_RESOURCE'   : 'Không có nguồn zip đã được đưa ra',
+    'ZIP_NO_PATH'       : 'Không có đường dẫn',
+
+    //
+    // SearchEngine
+    //
+    'SEARCH_LOADING': 'Đang tìm kiếm...',
+    'SEARCH_NO_RESULTS': 'Không có kết quả',
 
     //
     // PackageManager
@@ -332,18 +368,18 @@
     'LBL_ITALIC'       : 'Ngiêng',
     'LBL_UNDERLINE'    : 'Gạch dưới',
     'LBL_REGULAR'      : 'Bình thường',
-    'LBL_STRIKE'       : 'Strike',
+    'LBL_STRIKE'       : 'Gạch giữa',
     'LBL_INDENT'       : 'Thụt về',
     'LBL_OUTDENT'      : 'Quá hạn',
     'LBL_UNDO'         : 'Trở lại',
     'LBL_REDO'         : 'Làm lại',
     'LBL_CUT'          : 'Cắt',
-    'LBL_UNLINK'       : 'Bỏ link',
+    'LBL_UNLINK'       : 'Bỏ địa chỉ',
     'LBL_COPY'         : 'Sao chép',
     'LBL_PASTE'        : 'Dán',
     'LBL_INSERT'       : 'Thêm',
     'LBL_IMAGE'        : 'Ảnh',
-    'LBL_LINK'         : 'Link',
+    'LBL_LINK'         : 'Địa chỉ',
     'LBL_DISCONNECT'    : 'Mất kết nối',
     'LBL_APPLICATIONS'  : 'Các ứng dụng',
     'LBL_ADD_FOLDER'    : 'Thêm thư mục',
@@ -369,7 +405,18 @@
     'LBL_BUGREPORT' : 'Báo lỗi',
     'LBL_INSTALL' : 'Cài đặt',
     'LBL_UPDATE' : 'Cập nhật',
-    'LBL_REMOVE' : 'Xóa'
+    'LBL_REMOVE' : 'Xóa',
+    'LBL_SHOW_SIDEBAR' : 'Hiện Sidebar',
+    'LBL_SHOW_NAVIGATION' : 'Hiện nút điều hướng',
+    'LBL_SHOW_HIDDENFILES' : 'Hiện tập tin ẩn',
+    'LBL_SHOW_FILEEXTENSIONS' : 'Hiện đuôi tập tin',
+    'LBL_MOUNT': 'Gắn',
+    'LBL_DESCRIPTION': 'Thông tin thêm',
+    'LBL_USERNAME': 'Tên đăng nhập',
+    'LBL_PASSWORD': 'Mật khẩu',
+    'LBL_HOST': 'Host',
+    'LBL_NAMESPACE': 'Namespace',
+    'LBL_SEARCH': 'Tìm kiếm'
   };
 
 })();

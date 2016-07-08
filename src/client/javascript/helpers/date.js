@@ -31,9 +31,6 @@
 (function(Utils, VFS, API) {
   'use strict';
 
-  window.OSjs       = window.OSjs       || {};
-  OSjs.Helpers      = OSjs.Helpers      || {};
-
   /////////////////////////////////////////////////////////////////////////////
   // HELPERS
   /////////////////////////////////////////////////////////////////////////////
@@ -84,10 +81,10 @@
    *
    * Works just like 'Date', but has some extended methods
    *
-   * @api OSjs.Helpers.Date
-   * @extends Date
-   * @see Date
-   * @class ExtendedDate
+   * @summary Class for date manipulation and formatting.
+   *
+   * @constructor Date
+   * @memberof OSjs.Helpers
    */
   function ExtendedDate(date) {
     if ( date ) {
@@ -195,9 +192,10 @@
   /**
    * Get the 'Date' Object
    *
-   * @return  Date
+   * @function get
+   * @memberof OSjs.Helpers.Date#
    *
-   * @method  ExtendedDate::get()
+   * @return  {OSjs.Helpers.Date}
    */
   ExtendedDate.prototype.get = function() {
     return this.date;
@@ -206,10 +204,14 @@
   /**
    * Format date
    *
-   * @param   String      fmt     Format (ex: "Y/m/d")
+   * @function format
+   * @memberof OSjs.Helpers.Date#
    *
-   * @return  String              Formatted date
+   * @param   {String}      fmt     Format (ex: "Y/m/d")
    *
+   * @return  {String}              Formatted date
+   *
+   * <pre><code>
    * Format is (same as PHP docs):
    *
    *   d: Day of the month, 2 digits with leading zeros (01 to 31)
@@ -238,8 +240,7 @@
    *   O: Difference to Greenwich time (GMT) in hours (Example: +0200)
    *   T: Timezone abbreviation (Examples: EST, MDT ...)
    *   U: Seconds since the Unix Epoch (January 1 1970 00:00:00 GMT)
-   *
-   * @method  ExtendedDate::format()
+   * </code></pre>
    */
 
   ExtendedDate.prototype.format = function(fmt) {
@@ -249,13 +250,13 @@
   /**
    * Get First day in month
    *
-   * @param   String    fmt     Date format (optional)
+   * @function getFirstDayInMonth
+   * @memberof OSjs.Helpers.Date#
+   * @see OSjs.Helpers.Date#format
    *
-   * @return  Mixed     If no format is given it will return ExtendedDate
+   * @param   {String}    [fmt]     Date format
    *
-   * @see     ExtendedDate::format()
-   *
-   * @method  ExtendedDate::getFirstDayInMonth()
+   * @return  {Mixed}     If no format is given it will return ExtendedDate
    */
   ExtendedDate.prototype.getFirstDayInMonth = function(fmt) {
     return ExtendedDate.getFirstDayInMonth(fmt, null, null, this);
@@ -264,13 +265,13 @@
   /**
    * Get Last day in month
    *
-   * @param   String    fmt     Date format (optional)
+   * @function getLastDayInMonth
+   * @memberof OSjs.Helpers.Date#
+   * @see OSjs.Helpers.Date#format
    *
-   * @return  Mixed     If no format is given it will return ExtendedDate
+   * @param   {String}    [fmt]     Date format
    *
-   * @see     ExtendedDate::format()
-   *
-   * @method  ExtendedDate::getLastDayInMonth()
+   * @return  {Mixed}     If no format is given it will return ExtendedDate
    */
   ExtendedDate.prototype.getLastDayInMonth = function(fmt) {
     return ExtendedDate.getLastDayInMonth(fmt, null, null, this);
@@ -279,9 +280,10 @@
   /**
    * Get numbers of day in month
    *
-   * @return  int     Number of days
+   * @function getDaysInMonth
+   * @memberof OSjs.Helpers.Date#
    *
-   * @method  ExtendedDate::getDaysInMonth()
+   * @return  {Number}     Number of days
    */
   ExtendedDate.prototype.getDaysInMonth = function() {
     return ExtendedDate.getDaysInMonth(null, null, this);
@@ -290,9 +292,10 @@
   /**
    * Get week number
    *
-   * @return  int     Week
+   * @function getWeekNumber
+   * @memberof OSjs.Helpers.Date#
    *
-   * @method  ExtendedDate::getWeekNumber()
+   * @return  {Number}     Week
    */
   ExtendedDate.prototype.getWeekNumber = function() {
     return ExtendedDate.getWeekNumber(this);
@@ -301,12 +304,13 @@
   /**
    * Check if given range is within Month
    *
-   * @param   ExtendedDate    from      From date (can be Date)
-   * @param   ExtendedDate    to        To date (can be Date)
+   * @function isWithinMonth
+   * @memberof OSjs.Helpers.Date#
    *
-   * @return  bool
+   * @param   {(Date|OSjs.Helpers.Date)}    from      From date (can be Date)
+   * @param   {(Date|OSjs.Helpers.Date)}    to        To date (can be Date)
    *
-   * @method  ExtendedDate::isWithinMonth()
+   * @return  {Boolean}
    */
   ExtendedDate.prototype.isWithinMonth = function(from, to) {
     return ExtendedDate.isWithinMonth(this, from, to);
@@ -315,12 +319,10 @@
   /**
    * Check if given range is within Year
    *
-   * @param   ExtendedDate    from      From date (can be Date)
-   * @param   ExtendedDate    to        To date (can be Date)
+   * @function isWithinYear
+   * @memberof OSjs.Helpers.Date#
    *
-   * @return  bool
-   *
-   * @method  ExtendedDate::isWithinYear()
+   * @return  {Boolean}
    */
   ExtendedDate.prototype.getDayOfTheYear = function() {
     return ExtendedDate.getDayOfTheYear();
@@ -330,10 +332,20 @@
   // Static Methods
   //
 
+  /**
+   * @function format
+   * @memberof OSjs.Helpers.Date
+   * @see OSjs.Helpers.Date#format
+   */
   ExtendedDate.format = function(date, fmt) {
     return format(fmt, date);
   };
 
+  /**
+   * @function getPreviousMonth
+   * @memberof OSjs.Helpers.Date
+   * @see OSjs.Helpers.Date#getPreviousMonth
+   */
   ExtendedDate.getPreviousMonth = function(now) {
     now = now ? (now instanceof ExtendedDate ? now.date : now) : new Date();
     var current;
@@ -347,6 +359,11 @@
     return new ExtendedDate(current);
   };
 
+  /**
+   * @function getNextMonth
+   * @memberof OSjs.Helpers.Date
+   * @see OSjs.Helpers.Date#getNextMonth
+   */
   ExtendedDate.getNextMonth = function(now) {
     now = now ? (now instanceof ExtendedDate ? now.date : now) : new Date();
     var current;
@@ -360,6 +377,11 @@
     return new ExtendedDate(current);
   };
 
+  /**
+   * @function getFirstDayInMonth
+   * @memberof OSjs.Helpers.Date
+   * @see OSjs.Helpers.Date#getFirstDayInMonth
+   */
   ExtendedDate.getFirstDayInMonth = function(fmt, y, m, now) {
     now = _now(now);
     y = _y(y, now);
@@ -373,6 +395,11 @@
     return fmt ? format(fmt, date) : new ExtendedDate(date);
   };
 
+  /**
+   * @function getLastDayInMonth
+   * @memberof OSjs.Helpers.Date
+   * @see OSjs.Helpers.Date#getLastDayInMonth
+   */
   ExtendedDate.getLastDayInMonth = function(fmt, y, m, now) {
     now = _now(now);
     y = _y(y, now);
@@ -386,6 +413,11 @@
     return fmt ? format(fmt, date) : new ExtendedDate(date);
   };
 
+  /**
+   * @function getDaysInMonth
+   * @memberof OSjs.Helpers.Date
+   * @see OSjs.Helpers.Date#getDaysInMonth
+   */
   ExtendedDate.getDaysInMonth = function(y, m, now) {
     now = _now(now);
     y = _y(y, now);
@@ -396,6 +428,11 @@
     return parseInt(date.getDate(), 10);
   };
 
+  /**
+   * @function getWeekNumber
+   * @memberof OSjs.Helpers.Date
+   * @see OSjs.Helpers.Date#getWeekNumber
+   */
   ExtendedDate.getWeekNumber = function(now) {
     now = now ? (now instanceof ExtendedDate ? now.date : now) : new Date();
 
@@ -405,6 +442,11 @@
     return Math.ceil((((d - new Date(d.getFullYear(),0,1)) / 8.64e7) + 1) / 7);
   };
 
+  /**
+   * @function getDayName
+   * @memberof OSjs.Helpers.Date
+   * @see OSjs.Helpers.Date#getDayName
+   */
   ExtendedDate.getDayName = function(index, shrt) {
     if ( index < 0 || index === null || typeof index === 'undefined' ) {
       return filter(ExtendedDate.dayNames, index, shrt, 7);
@@ -415,6 +457,11 @@
     return ExtendedDate.dayNames[idx];
   };
 
+  /**
+   * @function getMonthName
+   * @memberof OSjs.Helpers.Date
+   * @see OSjs.Helpers.Date#getMonthName
+   */
   ExtendedDate.getMonthName = function(index, shrt) {
     if ( index < 0 || index === null || typeof index === 'undefined' ) {
       return filter(ExtendedDate.monthNames, index, shrt, 12);
@@ -425,6 +472,11 @@
     return ExtendedDate.monthNames[idx];
   };
 
+  /**
+   * @function isWithinMonth
+   * @memberof OSjs.Helpers.Date
+   * @see OSjs.Helpers.Date#isWithinMonth
+   */
   ExtendedDate.isWithinMonth = function(now, from, to) {
     if ( now.getFullYear() >= from.getFullYear() && now.getMonth() >= from.getMonth() ) {
       if ( now.getFullYear() <= to.getFullYear() && now.getMonth() <= to.getMonth() ) {
@@ -434,6 +486,11 @@
     return false;
   };
 
+  /**
+   * @function getDayOfTheYear
+   * @memberof OSjs.Helpers.Date
+   * @see OSjs.Helpers.Date#getDayOfTheYear
+   */
   ExtendedDate.getDayOfTheYear = function() {
     var now = new Date();
     var start = new Date(now.getFullYear(), 0, 0);

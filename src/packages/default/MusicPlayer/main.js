@@ -95,19 +95,28 @@
     var buttonEnd = scheme.find(this, 'ButtonEnd').set('disabled', true);
 
     seeker.on('change', function(ev) {
-      audio.pause();
-      audio.currentTime = ev.detail;
-      audio.play();
+      if ( audio && !audio.paused ) {
+        try {
+          audio.pause();
+          if ( ev ) {
+            audio.currentTime = ev.detail || 0;
+          }
+          audio.play();
+        } catch ( e ) {}
+      }
     });
 
     player.on('play', function(ev) {
+      seeker.set('disabled', false);
       buttonPause.set('disabled', false);
       buttonPlay.set('disabled', true);
     });
     player.on('ended', function(ev) {
+      seeker.set('disabled', true);
       buttonPause.set('disabled', true);
     });
     player.on('pause', function(ev) {
+      seeker.set('disabled', true);
       buttonPause.set('disabled', false);
       buttonPlay.set('disabled', false);
     });
@@ -120,6 +129,7 @@
       if ( !player.$element.src ) {
         return;
       }
+
       var msg = null;
       try {
         switch ( ev.target.error.code ) {
@@ -174,8 +184,7 @@
     this.updated = false;
 
     function getInfo() {
-      self._app._call('info', {filename: file.path}, function(res) {
-        var info = (res && res.result) ? res.result : null;
+      self._app._api('info', {filename: file.path}, function(err, info) {
         if ( info ) {
           if ( info.Artist ) { labelArtist.set('value', info.Artist); }
           if ( info.Album ) { labelAlbum.set('value', info.Album); }
@@ -238,9 +247,9 @@
     return DefaultApplication.prototype.destroy.apply(this, arguments);
   };
 
-  ApplicationMusicPlayer.prototype.init = function(settings, metadata, onInited) {
+  ApplicationMusicPlayer.prototype.init = function(settings, metadata) {
     var self = this;
-    DefaultApplication.prototype.init.call(this, settings, metadata, onInited, function(scheme, file) {
+    DefaultApplication.prototype.init.call(this, settings, metadata, function(scheme, file) {
       self._addWindow(new ApplicationMusicPlayerWindow(self, metadata, scheme, file));
     });
   };
@@ -251,6 +260,6 @@
 
   OSjs.Applications = OSjs.Applications || {};
   OSjs.Applications.ApplicationMusicPlayer = OSjs.Applications.ApplicationMusicPlayer || {};
-  OSjs.Applications.ApplicationMusicPlayer.Class = ApplicationMusicPlayer;
+  OSjs.Applications.ApplicationMusicPlayer.Class = Object.seal(ApplicationMusicPlayer);
 
 })(OSjs.Helpers.DefaultApplication, OSjs.Helpers.DefaultApplicationWindow, OSjs.Core.Application, OSjs.Core.Window, OSjs.Utils, OSjs.API, OSjs.VFS, OSjs.GUI);

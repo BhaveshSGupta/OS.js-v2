@@ -27,7 +27,7 @@
  * @author  Anders Evenrud <andersevenrud@gmail.com>
  * @licence Simplified BSD License
  */
-(function(CoreWM, Panel, PanelItem, Utils, API, VFS) {
+(function(CoreWM, Panel, PanelItem, Utils, API, GUI, VFS) {
   'use strict';
 
   /////////////////////////////////////////////////////////////////////////////
@@ -37,8 +37,8 @@
   /**
    * PanelItem: Buttons
    */
-  var PanelItemButtons = function(settings) {
-    PanelItem.apply(this, ['PanelItemButtons PanelItemFill', 'Buttons', settings, {
+  function PanelItemButtons(settings) {
+    PanelItem.apply(this, ['PanelItemButtons', 'Buttons', settings, {
       buttons: [
         {
           title: API._('LBL_SETTINGS'),
@@ -47,11 +47,11 @@
         }
       ]
     }]);
-
-    this.$container = null;
-  };
+  }
 
   PanelItemButtons.prototype = Object.create(PanelItem.prototype);
+  PanelItemButtons.constructor = PanelItem;
+
   PanelItemButtons.Name = 'Buttons'; // Static name
   PanelItemButtons.Description = 'Button Bar'; // Static description
   PanelItemButtons.Icon = 'actions/stock_about.png'; // Static icon
@@ -59,9 +59,6 @@
   PanelItemButtons.prototype.init = function() {
     var self = this;
     var root = PanelItem.prototype.init.apply(this, arguments);
-
-    this.$container = document.createElement('ul');
-    root.appendChild(this.$container);
 
     this.renderButtons();
 
@@ -75,7 +72,7 @@
       ghost = Utils.$remove(ghost);
       lastTarget = null;
       if ( lastPadding !== null ) {
-        self.$container.style.paddingRight = lastPadding;
+        self._$container.style.paddingRight = lastPadding;
       }
     }
 
@@ -88,14 +85,14 @@
       }
 
       if ( lastPadding === null ) {
-        lastPadding = self.$container.style.paddingRight;
+        lastPadding = self._$container.style.paddingRight;
       }
 
       if ( target !== lastTarget ) {
         clearGhost();
 
         ghost = document.createElement('li');
-        ghost.className = 'Button Ghost';
+        ghost.className = 'Ghost';
 
         if ( target.tagName === 'LI' ) {
           try {
@@ -107,10 +104,10 @@
       }
       lastTarget = target;
 
-      self.$container.style.paddingRight = '16px';
+      self._$container.style.paddingRight = '16px';
     }
 
-    API.createDroppable(this.$container, {
+    GUI.Helpers.createDroppable(this._$container, {
       onOver: function(ev, el, args) {
         if ( ev.target && !Utils.$hasClass(ev.target, 'Ghost') ) {
           createGhost(ev.target);
@@ -146,13 +143,8 @@
     return root;
   };
 
-  PanelItemButtons.prototype.destroy = function() {
-    this.$container = null;
-    PanelItem.prototype.destroy.apply(this, arguments);
-  };
-
   PanelItemButtons.prototype.clearButtons = function() {
-    Utils.$empty(this.$container);
+    Utils.$empty(this._$container);
   };
 
   PanelItemButtons.prototype.renderButtons = function() {
@@ -221,11 +213,16 @@
 
   PanelItemButtons.prototype.addButton = function(title, icon, menu, callback) {
     var sel = document.createElement('li');
-    sel.className = 'Button';
     sel.title = title;
     sel.innerHTML = '<img alt="" src="' + API.getIcon(icon) + '" />';
+    sel.setAttribute('role', 'button');
+    sel.setAttribute('aria-label', title);
 
-    Utils.$bind(sel, 'click', callback);
+    Utils.$bind(sel, 'mousedown', function(ev) {
+      ev.preventDefault();
+      ev.stopPropagation();
+    });
+    Utils.$bind(sel, 'click', callback, true);
     Utils.$bind(sel, 'contextmenu', function(ev) {
       ev.preventDefault();
       ev.stopPropagation();
@@ -234,7 +231,7 @@
       }
     });
 
-    this.$container.appendChild(sel);
+    this._$container.appendChild(sel);
   };
 
   /////////////////////////////////////////////////////////////////////////////
@@ -246,4 +243,4 @@
   OSjs.Applications.CoreWM.PanelItems                  = OSjs.Applications.CoreWM.PanelItems || {};
   OSjs.Applications.CoreWM.PanelItems.Buttons          = PanelItemButtons;
 
-})(OSjs.Applications.CoreWM.Class, OSjs.Applications.CoreWM.Panel, OSjs.Applications.CoreWM.PanelItem, OSjs.Utils, OSjs.API, OSjs.VFS);
+})(OSjs.Applications.CoreWM.Class, OSjs.Applications.CoreWM.Panel, OSjs.Applications.CoreWM.PanelItem, OSjs.Utils, OSjs.API, OSjs.GUI, OSjs.VFS);

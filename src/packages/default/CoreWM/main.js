@@ -43,26 +43,98 @@
   var CoreWM = function(args, metadata) {
     var ds = OSjs.Applications.CoreWM.DefaultSettings;
 
-    WindowManager.apply(this, ['CoreWM', this, args, metadata, ds(args.defaults || {})]);
+    var importSettings = args.defaults || {};
 
-    this.scheme         = null;
-    this.panels         = [];
-    this.switcher       = null;
-    this.iconView       = null;
-    this.$themeLink     = null;
-    this.$themeScript   = null;
-    this.$animationLink = null;
+    WindowManager.apply(this, ['CoreWM', this, args, metadata, ds(importSettings)]);
+
+    this.scheme           = null;
+    this.panels           = [];
+    this.switcher         = null;
+    this.iconView         = null;
+    this.$themeLink       = null;
+    this.$themeScript     = null;
+    this.$animationLink   = null;
+    this.importedSettings = importSettings;
+    this.isResponsive     = window.innerWidth <= 800;
+
+    this.generatedHotkeyMap = {};
+
+    this.hotkeyMap = {
+      SEARCH: function(ev, win, wm) {
+        if ( wm ) {
+          var panel = wm.getPanel();
+          if ( panel ) {
+            var pitem = panel.getItemByType(OSjs.Applications.CoreWM.PanelItems.Search);
+            if ( pitem ) {
+              ev.preventDefault();
+              pitem.show();
+            }
+          }
+        }
+      },
+      SWITCHER: function(ev, win, wm) {
+        if ( wm.getSetting('enableSwitcher') && wm.switcher ) {
+          wm.switcher.show(ev, win, wm);
+        }
+      },
+      WINDOW_MINIMIZE: function(ev, win) {
+        if ( win ) {
+          win._minimize();
+        }
+      },
+      WINDOW_MAXIMIZE: function(ev, win) {
+        if ( win ) {
+          win._maximize();
+        }
+      },
+      WINDOW_RESTORE: function(ev, win) {
+        if ( win ) {
+          win._restore();
+        }
+      },
+      WINDOW_MOVE_LEFT: function(ev, win) {
+        if ( win ) {
+          win._moveTo('left');
+        }
+      },
+      WINDOW_MOVE_RIGHT: function(ev, win) {
+        if ( win ) {
+          win._moveTo('right');
+        }
+      },
+      WINDOW_MOVE_UP: function(ev, win) {
+        if ( win ) {
+          win._moveTo('top');
+        }
+      },
+      WINDOW_MOVE_DOWN: function(ev, win) {
+        if ( win ) {
+          win._moveTo('bottom');
+        }
+      }
+    };
 
     this._$notifications    = document.createElement('corewm-notifications');
+    this._$notifications.setAttribute('role', 'log');
+
     document.body.appendChild(this._$notifications);
   };
 
   CoreWM.prototype = Object.create(WindowManager.prototype);
+  CoreWM.constructor = WindowManager;
 
   CoreWM.prototype.init = function() {
+    var self = this;
     var link = (OSjs.Core.getConfig().Connection.RootURI || '/') + 'blank.css';
+
     this.setThemeLink(Utils.checkdir(link));
     this.setAnimationLink(Utils.checkdir(link));
+
+    this._on(/^vfs\:(?!(un)?mount)/, function(file, options, msg) {
+      if ( (msg === 'vfs:unlink' || msg === 'vfs:delete') && file.path ) {
+        self.iconView.removeShortcutByPath(file.path);
+      }
+    });
 
     WindowManager.prototype.init.apply(this, arguments);
   };
@@ -148,10 +220,12 @@
 
   };
 
-  CoreWM.prototype.destroy = function(kill, force) {
-    if ( !force && kill && !window.confirm(OSjs.Applications.CoreWM._('Killing this process will stop things from working!')) ) {
+  CoreWM.prototype.destroy = function(force) {
+    if ( !force && !window.confirm(OSjs.Applications.CoreWM._('Killing this process will stop things from working!')) ) {
       return false;
     }
+
+    this.removeNotificationIcon('_HandlerUserNotification');
 
     if ( this.iconView ) {
       this.iconView.destroy();
@@ -164,9 +238,12 @@
     }
 
     // Reset
-    var ds = OSjs.Applications.CoreWM.DefaultSettings;
     this.destroyPanels();
-    this.applySettings(ds(this._defaults), true);
+    var settings = this.importedSettings;
+    try {
+      settings.background = 'color';
+    } catch ( e ) {}
+    this.applySettings(OSjs.Applications.CoreWM.DefaultSettings(settings), true);
 
     // Clear DOM
     this._$notifications = Utils.$remove(this._$notifications);
@@ -185,17 +262,6 @@
       p.destroy();
     });
     this.panels = [];
-  };
-
-  // Copy from Application
-  CoreWM.prototype._onMessage = function(obj, msg, args) {
-    if ( this.iconView ) {
-      if ( msg === 'vfs' ) {
-        if ( args && args.type === 'delete' && args.file ) {
-          this.iconView.removeShortcutByPath(args.file.path);
-        }
-      }
-    }
   };
 
   // Copy from Application
@@ -227,7 +293,7 @@
     var self = this;
 
     // Enable dropping of new wallpaper if no iconview is enabled
-    OSjs.API.createDroppable(document.body, {
+    GUI.Helpers.createDroppable(document.body, {
       onOver: function(ev, el, args) {
         self.onDropOver(ev, el, args);
       },
@@ -322,19 +388,25 @@
       // Workaround for windows appearing behind panel
       var p = this.panels[0];
       if ( p && p.getOntop() && p.getPosition('top') ) {
-        var space = this.getWindowSpace();
-        this._windows.forEach(function(iter) {
-          if ( iter && iter._position.y < space.top ) {
-            console.warn('CoreWM::initPanels()', 'I moved this window because it overlapped with a panel!', iter);
-            iter._move(iter._position.x, space.top);
-          }
-        });
+        setTimeout(function() {
+          var space = self.getWindowSpace();
+          self._windows.forEach(function(iter) {
+            if ( iter && iter._position.y < space.top ) {
+              console.warn('CoreWM::initPanels()', 'I moved this window because it overlapped with a panel!', iter);
+              iter._move(iter._position.x, space.top);
+            }
+          });
+        }, this.getAnimDuration() + 100);
       }
 
       if ( this.iconView ) {
         this.iconView.resize(this);
       }
     }
+
+    setTimeout(function() {
+      self.setStyles(self._settings.get());
+    }, 1000);
   };
 
   CoreWM.prototype.initIconView = function() {
@@ -361,46 +433,72 @@
   // Events
   //
 
-  CoreWM.prototype.resize = function(ev, rect) {
-    if ( !this.getSetting('moveOnResize') ) { return; }
+  CoreWM.prototype.resize = function(ev, rect, wasInited) {
 
     var space = this.getWindowSpace();
     var margin = this.getSetting('desktopMargin');
-    var i = 0, l = this._windows.length, iter, wrect;
-    var mx, my, moved;
+    var windows = this._windows;
+    var responsive = window.innerWidth <= 800;
 
-    for ( i; i < l; i++ ) {
-      iter = this._windows[i];
-      if ( !iter ) { continue; }
-      wrect = iter._getViewRect();
-      if ( wrect === null ) { continue; }
-      if ( iter._state.mimimized ) { continue; }
+    function moveIntoView() {
+      var i = 0, l = windows.length, iter, wrect;
+      var mx, my, moved;
 
-      // Move the window into view if outside of view
-      mx = iter._position.x;
-      my = iter._position.y;
-      moved = false;
+      for ( i; i < l; i++ ) {
+        iter = windows[i];
+        if ( !iter ) { continue; }
+        wrect = iter._getViewRect();
+        if ( wrect === null ) { continue; }
+        if ( iter._state.mimimized ) { continue; }
 
-      if ( (wrect.left + margin) > rect.width ) {
-        mx = space.width - iter._dimension.w;
-        moved = true;
-      }
-      if ( (wrect.top + margin) > rect.height ) {
-        my = space.height - iter._dimension.h;
-        moved = true;
-      }
+        // Move the window into view if outside of view
+        mx = iter._position.x;
+        my = iter._position.y;
+        moved = false;
 
-      if ( moved ) {
-        if ( mx < space.left ) { mx = space.left; }
-        if ( my < space.top  ) { my = space.top;  }
-        iter._move(mx, my);
-      }
+        if ( (wrect.left + margin) > rect.width ) {
+          mx = space.width - iter._dimension.w;
+          moved = true;
+        }
+        if ( (wrect.top + margin) > rect.height ) {
+          my = space.height - iter._dimension.h;
+          moved = true;
+        }
 
-      // Restore maximized windows (FIXME: Better solution?)
-      if ( iter._state.maximized ) {
-        iter._restore(true, false);
+        if ( moved ) {
+          if ( mx < space.left ) { mx = space.left; }
+          if ( my < space.top  ) { my = space.top;  }
+          iter._move(mx, my);
+        }
+
+        // Restore maximized windows (FIXME: Better solution?)
+        if ( iter._state.maximized && (wasInited ? iter._restored : true) ) {
+          iter._restore(true, false);
+        }
       }
     }
+
+    function emitResize() {
+      windows.forEach(function(w) {
+        if ( w ) {
+          w._emit('resize');
+        }
+      });
+    }
+
+    if ( responsive ) {
+      emitResize();
+    } else {
+      if ( this.isResponsive ) { // Emit the resize signal again if we changed view
+        emitResize();
+      }
+
+      if ( this.getSetting('moveOnResize') ) {
+        moveIntoView();
+      }
+    }
+
+    this.isResponsive = responsive;
   };
 
   CoreWM.prototype.onDropLeave = function() {
@@ -467,12 +565,11 @@
     var self = this;
 
     VFS.upload({
-      app: self,
       destination: API.getDefaultPath(),
       files: files
     }, function(error, file) {
       if ( !error && file && self.iconView ) {
-        self.iconView.addShortcut(file, self);
+        self.iconView.addShortcut(file, self, true);
       }
     });
   };
@@ -495,7 +592,7 @@
   CoreWM.prototype.onKeyUp = function(ev, win) {
     if ( !ev ) { return; }
 
-    if ( !ev.shiftKey ) {
+    if ( !ev.altKey ) {
       if ( this.switcher ) {
         this.switcher.hide(ev, win, this);
       }
@@ -505,39 +602,18 @@
   CoreWM.prototype.onKeyDown = function(ev, win) {
     if ( !ev ) { return; }
 
-    var keys = Utils.Keys;
-    if ( ev.shiftKey && ev.keyCode === keys.TILDE ) { // Toggle Window switcher
-      if ( !this.getSetting('enableSwitcher') ) { return; }
-
-      if ( this.switcher ) {
-        this.switcher.show(ev, win, this);
-      }
-    } else if ( ev.altKey ) {
-      if ( !this.getSetting('enableHotkeys') ) { return; }
-
-      if ( win && win._properties.allow_hotkeys ) {
-        if ( ev.keyCode === keys.H ) { // Hide window [H]
-          win._minimize();
-        } else if ( ev.keyCode === keys.M ) { // Maximize window [M]
-          win._maximize();
-        } else if ( ev.keyCode === keys.R ) { // Restore window [R]
-          win._restore();
-        } else if ( ev.keyCode === keys.LEFT ) { // Pin Window Left [Left]
-          win._moveTo('left');
-        } else if ( ev.keyCode === keys.RIGHT ) { // Pin Window Right [Right]
-          win._moveTo('right');
-        } else if ( ev.keyCode === keys.UP ) { // Pin Window Top [Up]
-          win._moveTo('top');
-        } else if ( ev.keyCode === keys.DOWN ) { // Pin Window Bottom [Down]
-          win._moveTo('bottom');
+    var map = this.generatedHotkeyMap;
+    for ( var i in map ) {
+      if ( map.hasOwnProperty(i) ) {
+        if ( Utils.keyCombination(ev, i) ) {
+          map[i](ev, win, this);
+          break;
         }
       }
     }
   };
 
   CoreWM.prototype.showSettings = function(category) {
-    var self = this;
-
     OSjs.API.launch('ApplicationSettings', {category: category});
   };
 
@@ -576,9 +652,9 @@
         opts.timeout  = 5000;
       }
 
-      console.log('OSjs::Core::WindowManager::notification()', opts);
+      console.debug('CoreWM::notification()', opts);
 
-      var container  = document.createElement('corewm-notification-entry');
+      var container  = document.createElement('corewm-notification');
       var classNames = [''];
       var self       = this;
       var timeout    = null;
@@ -632,7 +708,13 @@
       if ( opts.message ) {
         var message = document.createElement('div');
         message.className = 'Message';
-        message.appendChild(document.createTextNode(opts.message));
+        var lines = opts.message.split('\n');
+        lines.forEach(function(line, idx) {
+          message.appendChild(document.createTextNode(line));
+          if ( idx < (lines.length - 1) ) {
+            message.appendChild(document.createElement('br'));
+          }
+        });
         classNames.push('HasMessage');
         container.appendChild(message);
       }
@@ -642,6 +724,9 @@
         this._$notifications.style.display = 'block';
       }
 
+      container.setAttribute('aria-label', String(opts.title));
+      container.setAttribute('role', 'alert');
+
       container.className = classNames.join(' ');
       container.onclick = function(ev) {
         _remove();
@@ -649,9 +734,8 @@
         opts.onClick(ev);
       };
 
-      var space = this.getWindowSpace();
-      this._$notifications.style.top = space.top + 'px';
-
+      var space = this.getWindowSpace(true);
+      this._$notifications.style.marginTop = String(space.top) + 'px';
       this._$notifications.appendChild(container);
 
       if ( opts.timeout ) {
@@ -731,10 +815,13 @@
     API.createMenu(menu, ev);
   };
 
-  CoreWM.prototype.applySettings = function(settings, force, save) {
-    console.group('OSjs::Applications::CoreWM::applySettings');
+  CoreWM.prototype.applySettings = function(settings, force, save, triggerWatch) {
+    var self = this;
+    console.group('CoreWM::applySettings()');
 
     settings = force ? settings : Utils.mergeObject(this._settings.get(), settings);
+
+    console.log(settings);
 
     this.setBackground(settings);
     this.setTheme(settings);
@@ -745,11 +832,19 @@
       this.initPanels(true);
       if ( settings ) {
         if ( settings.language ) {
-          OSjs.Core.getSettingsManager().set('Core', 'Locale', settings.language);
+          OSjs.Core.getSettingsManager().set('Core', 'Locale', settings.language, triggerWatch);
+          API.setLocale(settings.language);
         }
-        this._settings.set(null, settings, save);
+        this._settings.set(null, settings, save, triggerWatch);
       }
     }
+
+    var keys = this._settings.get('hotkeys');
+    Object.keys(keys).forEach(function(k) {
+      self.generatedHotkeyMap[keys[k]] = function() {
+        return self.hotkeyMap[k].apply(this, arguments);
+      };
+    });
 
     console.groupEnd();
 
@@ -797,26 +892,25 @@
       }
     }
 
-    console.log('Wallpaper name', name);
-    console.log('Wallpaper type', type);
-    console.log('Wallpaper className', className);
-
     document.body.setAttribute('data-background-style', className);
 
     if ( back !== 'none' ) {
-      VFS.url(back, function(error, result) {
-        if ( !error ) {
-          back = 'url(\'' + result + '\')';
-          document.body.style.backgroundImage = back;
-        }
-      });
+      try {
+        VFS.url(back, function(error, result) {
+          if ( !error ) {
+            back = 'url(\'' + result + '\')';
+            document.body.style.backgroundImage = back;
+          }
+        });
+      } catch ( e ) {
+        console.warn('CoreWM::setBackground()', e, e.stack);
+      }
     } else {
       document.body.style.backgroundImage = back;
     }
   };
 
   CoreWM.prototype.setTheme = function(settings) {
-    console.log('theme', settings.theme);
     if ( this.$themeLink ) {
       if ( settings.theme ) {
         this.setThemeLink(API.getThemeCSS(settings.theme));
@@ -831,7 +925,6 @@
 
     this.setThemeScript(API.getThemeResource('theme.js'));
 
-    console.log('animations', settings.animations);
     if ( this.$animationLink ) {
       if ( settings.animations ) {
         this.setAnimationLink(API.getApplicationResource(this, 'animations.css'));
@@ -853,28 +946,55 @@
   };
 
   CoreWM.prototype.setStyles = function(settings) {
+    /*jshint sub:true*/
     var styles = {};
+    var raw = '';
+
     if ( settings.panels ) {
       settings.panels.forEach(function(p, i) {
         styles['corewm-panel'] = {};
-        styles['corewm-notification-entry'] = {};
-        styles['corewm-notification-entry:before'] = {
+        styles['corewm-notification'] = {};
+        styles['corewm-notification:before'] = {
           'opacity': p.options.opacity / 100
         };
         styles['corewm-panel:before'] = {
           'opacity': p.options.opacity / 100
         };
+
+        styles['.custom-notification'] = {};
+        styles['.custom-notification:before'] = {
+          'opacity': p.options.opacity / 100
+        };
+
         if ( p.options.background ) {
           styles['corewm-panel:before']['background-color'] = p.options.background;
-          styles['corewm-notification-entry:before']['background-color'] = p.options.background;
+          styles['corewm-notification:before']['background-color'] = p.options.background;
+          styles['.custom-notification:before']['background-color'] = p.options.background;
         }
         if ( p.options.foreground ) {
           styles['corewm-panel']['color'] = p.options.foreground;
-          styles['corewm-notification-entry']['color'] = p.options.foreground;
+          styles['corewm-notification']['color'] = p.options.foreground;
+          styles['.custom-notification']['color'] = p.options.foreground;
         }
-
       });
     }
+
+    raw += '@media all and (max-width: 800px) {\n';
+    raw += 'application-window {\n';
+
+    var borderSize = 0;
+    var space = this.getWindowSpace(true);
+    var theme = this.getStyleTheme(true);
+    if ( theme && theme.style && theme.style.window ) {
+      borderSize = theme.style.window.border;
+    }
+
+    raw += 'top:' + String(space.top + borderSize) + 'px !important;\n';
+    raw += 'left:' + String(space.left + borderSize) + 'px !important;\n';
+    raw += 'right:' + String(borderSize) + 'px !important;\n';
+    raw += 'bottom:' + String(space.bottom + borderSize) + 'px !important;\n';
+    raw += '\n}';
+    raw += '\n}';
 
     styles['#CoreWMDesktopIconView'] = {};
     if ( settings.invertIconViewColor && settings.backgroundColor ) {
@@ -882,7 +1002,7 @@
     }
 
     if ( Object.keys(styles).length ) {
-      this.createStylesheet(styles);
+      this.createStylesheet(styles, raw);
     }
   };
 
@@ -921,6 +1041,8 @@
     var s = WindowManager.prototype.getWindowSpace.apply(this, arguments);
     var d = this.getSetting('desktopMargin');
 
+    s.bottom = 0;
+
     this.panels.forEach(function(p) {
       if ( p && p.getOntop() ) {
         var ph = p.getHeight();
@@ -932,6 +1054,10 @@
           s.height -= ph;
         } else {
           s.height -= ph;
+        }
+
+        if ( p._options.get('position') === 'bottom' ) {
+          s.bottom += ph;
         }
       }
     });
@@ -973,14 +1099,14 @@
     var val = WindowManager.prototype.getSetting.apply(this, arguments);
     if ( typeof val === 'undefined' || val === null ) {
       var ds = OSjs.Applications.CoreWM.DefaultSettings;
-      return ds(this._defaults)[k];
+      return ds(this.importedSettings)[k];
     }
     return val;
   };
 
   CoreWM.prototype.getDefaultSetting = function(k) {
     var ds = OSjs.Applications.CoreWM.DefaultSettings;
-    var settings = ds(this._defaults);
+    var settings = ds(this.importedSettings);
     if ( typeof k !== 'undefined' ) {
       return settings[k];
     }
@@ -1026,7 +1152,7 @@
 
   OSjs.Applications                          = OSjs.Applications || {};
   OSjs.Applications.CoreWM                   = OSjs.Applications.CoreWM || {};
-  OSjs.Applications.CoreWM.Class             = CoreWM;
+  OSjs.Applications.CoreWM.Class             = Object.seal(CoreWM);
   OSjs.Applications.CoreWM.PanelItems        = OSjs.Applications.CoreWM.PanelItems || {};
   OSjs.Applications.CoreWM.CurrentTheme      = OSjs.Applications.CoreWM.CurrentTheme || null;
 

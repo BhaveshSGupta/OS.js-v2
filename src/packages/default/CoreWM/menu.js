@@ -55,7 +55,7 @@
 
     function createEvent(iter) {
       return function(el) {
-        OSjs.API.createDraggable(el, {
+        OSjs.GUI.Helpers.createDraggable(el, {
           type   : 'application',
           data   : {
             launch: iter.name
@@ -78,7 +78,7 @@
 
     Object.keys(apps).forEach(function(a) {
       var iter = apps[a];
-      if ( iter.type === 'application' ) {
+      if ( iter.type === 'application' && iter.visible !== false ) {
         var cat = iter.category && cats[iter.category] ? iter.category : 'unknown';
         cats[cat].push({name: a, data: iter});
       }
@@ -127,7 +127,7 @@
       img.src = _createIcon(iter, a, '32x32');
 
       var txt = document.createElement('div');
-      txt.appendChild(document.createTextNode(iter.name.replace(/([^\s-]{6})([^\s-]{6})/, '$1-$2')));
+      txt.appendChild(document.createTextNode(iter.name)); //.replace(/([^\s-]{8})([^\s-]{8})/, '$1-$2')));
 
       Utils.$bind(entry, 'mousedown', function(ev) {
         ev.stopPropagation();
@@ -142,7 +142,7 @@
 
     Object.keys(apps).forEach(function(a) {
       var iter = apps[a];
-      if ( iter.type === 'application' ) {
+      if ( iter.type === 'application' && iter.visible !== false ) {
         createEntry(a, iter);
       }
     });
@@ -191,35 +191,29 @@
   function doShowMenu(ev) {
     var wm = OSjs.Core.getWindowManager();
 
-    function isTouchDevice() {
-      if ( 'ontouchstart' in document.documentElement ) {
-        return true;
-      }
-      try {
-        if ( document.createEvent('TouchEvent') ) {
-          return true;
-        }
-      } catch ( e ) {}
-
-      var el = document.createElement('div');
-      el.setAttribute('ongesturestart', 'return;'); // or try 'ontouchstart'
-      return typeof el.ongesturestart === 'function';
-    }
-
-    //if ( isTouchDevice() || (wm && wm.getSetting('useTouchMenu') === true) ) {
-    //FIXME
     if ( (wm && wm.getSetting('useTouchMenu') === true) ) {
       var inst = new ApplicationMenu();
       var pos = {x: ev.clientX, y: ev.clientY};
+
       if ( ev.target ) {
-        var target = ev.target;
-        if ( target.tagName === 'IMG' ) {
-          target = target.parentNode;
-        }
-        var rect = Utils.$position(target, document.body);
+        var rect = Utils.$position(ev.target, document.body);
         if ( rect.left && rect.top && rect.width && rect.height ) {
-          pos.x = rect.left - (rect.width / 2) + 4;
-          pos.y = rect.top + rect.height + 4;
+          pos.x = rect.left - (rect.width / 2);
+
+          if ( pos.x <= 16 ) {
+            pos.x = 0; // Snap to left
+          }
+
+          var panel = Utils.$parent(ev.target, function(node) {
+            return node.tagName.toLowerCase() === 'corewm-panel';
+          });
+
+          if ( panel ) {
+            var prect = Utils.$position(panel);
+            pos.y = prect.top + prect.height;
+          } else {
+            pos.y = rect.top + rect.height;
+          }
         }
       }
       API.createMenu(null, pos, inst);

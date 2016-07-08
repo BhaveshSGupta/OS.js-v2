@@ -30,53 +30,7 @@
 (function(Application, Window, Utils, API, VFS, GUI) {
   'use strict';
 
-  var categories = ['theme', 'desktop', 'panel', 'user', 'fileview', 'packages'];
-
-  function fetchJSON(cb) {
-    var url = 'http://andersevenrud.github.io/OS.js-v2/store/packages.json';
-    API.curl({
-      body: {
-        url: url,
-        method: 'GET'
-      }
-    }, cb);
-  }
-
-  function installSelected(download, cb) {
-    var handler = OSjs.Core.getHandler();
-    var pacman = OSjs.Core.getPackageManager();
-
-    VFS.remoteRead(download, 'application/zip', function(error, ab) {
-      if ( error ) {
-        cb(error);
-        return;
-      }
-
-      var dest = new VFS.File({
-        filename: Utils.filename(download),
-        type: 'file',
-        path: 'home:///' + Utils.filename(download),
-        mime: 'application/zip'
-      });
-
-      VFS.write(dest, ab, function(error, success) {
-        if ( error ) {
-          cb('Failed to write package: ' + error); // FIXME
-          return;
-        }
-
-        OSjs.Core.getPackageManager().install(dest, function(error) {
-          if ( error ) {
-            cb('Failed to install package: ' + error); // FIXME
-            return;
-          }
-          pacman.generateUserMetadata(function() {
-            cb(false, true);
-          });
-        });
-      });
-    });
-  }
+  var categories = ['theme', 'desktop', 'panel', 'user', 'fileview', 'search'];
 
   /////////////////////////////////////////////////////////////////////////////
   // WINDOWS
@@ -204,8 +158,12 @@
   };
 
   ApplicationSettingsWindow.prototype.setContainer = function(idx, save) {
+    if ( !this._scheme ) {
+      return;
+    }
+
     var found;
-    var indexes = ['TabsTheme', 'TabsDesktop', 'TabsPanel', 'TabsUser', 'TabsFileView', 'TabsPackages'];
+    var indexes = ['TabsTheme', 'TabsDesktop', 'TabsPanel', 'TabsUser', 'TabsFileView', 'TabsSearch'];
     if ( typeof idx === 'string' ) {
       idx = Math.max(0, categories.indexOf(idx));
     }
@@ -244,8 +202,8 @@
     this.initDesktopTab(wm, scheme, init);
     this.initPanelTab(wm, scheme, init);
     this.initUserTab(wm, scheme, init);
-    this.initPackagesTab(wm, scheme, init);
     this.initFileViewTab(wm, scheme, init);
+    this.initSearchTab(wm, scheme, init);
   };
 
   /**
@@ -500,13 +458,16 @@
       var list = [];
       self.panelItems.forEach(function(i, idx) {
         var name = i.name;
-        list.push({
-          value: idx,
-          columns: [{
-            icon: API.getIcon(items[name].Icon),
-            label: Utils.format('{0} ({1})', items[name].Name, items[name].Description)
-          }]
-        });
+
+        if ( items[name] ) {
+          list.push({
+            value: idx,
+            columns: [{
+              icon: API.getIcon(items[name].Icon),
+              label: Utils.format('{0} ({1})', items[name].Name, items[name].Description)
+            }]
+          });
+        }
       });
       max = self.panelItems.length - 1;
 
@@ -595,7 +556,9 @@
     if ( init ) {
       var langs = [];
       Object.keys(locales).forEach(function(l) {
-        langs.push({label: locales[l], value: l});
+        if ( OSjs.Locales[l] ) {
+          langs.push({label: locales[l], value: l});
+        }
       });
       scheme.find(this, 'UserLocale').add(langs);
     }
@@ -606,172 +569,6 @@
     scheme.find(this, 'UserUsername').set('value', user.username);
     scheme.find(this, 'UserGroups').set('value', user.groups);
     scheme.find(this, 'UserLocale').set('value', API.getLocale());
-  };
-
-  /**
-   * Packages
-   */
-  ApplicationSettingsWindow.prototype.initPackagesTab = function(wm, scheme, init) {
-    var self = this;
-    var handler = OSjs.Core.getHandler();
-    var pacman = OSjs.Core.getPackageManager();
-
-    if ( !init ) {
-      return; // TODO
-    }
-
-    //
-    // Installed
-    //
-    var view = scheme.find(this, 'InstalledPackages');
-
-    var sm = OSjs.Core.getSettingsManager();
-    var pool = sm.instance('Packages', {hidden: []});
-    var list, hidden;
-
-    function updateEnabledStates() {
-      list = pacman.getPackages(false);
-      hidden = pool.get('hidden');
-    }
-
-    function renderInstalled() {
-      updateEnabledStates();
-
-      var rows = [];
-      Object.keys(list).forEach(function(k, idx) {
-        rows.push({
-          index: idx,
-          value: k,
-          columns: [
-            {label: ''},
-            {label: k},
-            {label: list[k].scope},
-            {label: list[k].name}
-          ]
-        });
-      });
-
-      view.clear();
-      view.add(rows);
-
-      view.$element.querySelectorAll('gui-list-view-body > gui-list-view-row').forEach(function(row) {
-        var col = row.children[0];
-        var name = row.getAttribute('data-value');
-        var enabled = hidden.indexOf(name) >= 0;
-
-        scheme.create(self, 'gui-checkbox', {value: enabled}, col).on('change', function(ev) {
-          var idx = hidden.indexOf(name);
-
-          if ( ev.detail ) {
-            if ( idx < 0 ) {
-              hidden.push(name);
-            }
-          } else {
-            if ( idx >= 0 ) {
-              hidden.splice(idx, 1);
-            }
-          }
-        });
-      });
-    }
-
-    scheme.find(this, 'ButtonSaveHidden').on('click', function() {
-      self._toggleLoading(true);
-      pool.set('hidden', hidden, function() {
-        self._toggleLoading(false);
-      });
-    });
-
-    scheme.find(this, 'ButtonRegen').on('click', function() {
-      self._toggleLoading(true);
-      pacman.generateUserMetadata(function() {
-        self._toggleLoading(false);
-
-        renderInstalled();
-      });
-    });
-
-    scheme.find(this, 'ButtonZipInstall').on('click', function() {
-      self._toggleDisabled(true);
-
-      API.createDialog('File', {
-        mime: ['application/zip']
-      }, function(ev, button, result) {
-        if ( button !== 'ok' || !result ) {
-          self._toggleDisabled(false);
-        } else {
-          OSjs.Core.getPackageManager().install(result, function() {
-            self._toggleDisabled(false);
-            renderInstalled();
-          });
-        }
-      }, self);
-    });
-
-    //
-    // Store
-    //
-    var storeView = scheme.find(this, 'AppStorePackages');
-
-    function renderStore() {
-      self._toggleLoading(true);
-      fetchJSON(function(error, result) {
-        self._toggleLoading(false);
-
-        if ( error ) {
-          alert('Failed getting packages: ' + error); // FIXME
-          return;
-        }
-
-        var jsn = Utils.fixJSON(result.body);
-        var rows = [];
-        if ( jsn instanceof Array ) {
-          jsn.forEach(function(i, idx) {
-            rows.push({
-              index: idx,
-              value: i.download,
-              columns: [
-                {label: i.name},
-                {label: i.version},
-                {label: i.author}
-              ]
-            });
-          });
-        }
-
-        storeView.clear();
-        storeView.add(rows);
-      });
-    }
-
-    scheme.find(this, 'ButtonStoreRefresh').on('click', function() {
-      renderStore();
-    });
-
-    scheme.find(this, 'ButtonStoreInstall').on('click', function() {
-      var selected = storeView.get('selected');
-      if ( selected.length && selected[0].data ) {
-        self._toggleLoading(true);
-        installSelected(selected[0].data, function(error, result) {
-          self._toggleLoading(false);
-          if ( error ) {
-            alert(error); // FIXME
-            return;
-          }
-        });
-      }
-    });
-
-    //
-    // Init
-    //
-    renderInstalled();
-
-    scheme.find(this, 'TabsPackages').on('change', function(ev) {
-      if ( ev.detail && ev.detail.index === 1 ) {
-        renderStore();
-      }
-    });
   };
 
   /**
@@ -790,9 +587,78 @@
   };
 
   /**
+   * Search
+   */
+  ApplicationSettingsWindow.prototype.initSearchTab = function(wm, scheme, init) {
+    var self = this;
+    var sm = OSjs.Core.getSettingsManager();
+    var searchOptions = Utils.cloneObject(sm.get('SearchEngine') || {});
+
+    scheme.find(this, 'SearchEnableApplications').set('value', searchOptions.applications === true);
+    scheme.find(this, 'SearchEnableFiles').set('value', searchOptions.files === true);
+
+    var view = scheme.find(this, 'SearchPaths').clear();
+    view.set('columns', [
+      {label: 'Path'}
+    ]);
+
+    var list = (searchOptions.paths || []).map(function(l) {
+      return {
+        value: l,
+        id: l,
+        columns: [
+          {label: l}
+        ]
+      };
+    });
+
+    view.add(list);
+
+    if ( !init ) {
+      return;
+    }
+
+    function openAddDialog() {
+      self._toggleDisabled(true);
+
+      API.createDialog('File', {
+        select: 'dir',
+        mfilter: [
+          function(m) {
+            return m.module.searchable === true;
+          }
+        ]
+      }, function(ev, button, result) {
+        self._toggleDisabled(false);
+        if ( button === 'ok' && result ) {
+          view.add([{
+            value: result.path,
+            id: result.path,
+            columns: [
+              {label: result.path}
+            ]
+          }]);
+        }
+      }, self);
+    }
+
+    function removeSelected() {
+      var current = view.get('value') || [];
+      current.forEach(function(c) {
+        view.remove(c.index);
+      });
+    }
+
+    scheme.find(this, 'SearchAdd').on('click', openAddDialog);
+    scheme.find(this, 'SearchRemove').on('click', removeSelected);
+  };
+
+  /**
    * Apply
    */
   ApplicationSettingsWindow.prototype.applySettings = function(wm, scheme) {
+    var _ = OSjs.Applications.ApplicationSettings._;
+
     // Theme
     this.settings.theme = scheme.find(this, 'StyleThemeName').get('value');
     this.settings.sounds = scheme.find(this, 'SoundThemeName').get('value');
@@ -826,17 +692,53 @@
     // User
     this.settings.language = scheme.find(this, 'UserLocale').get('value');
 
-    var showHiddenFiles = scheme.find(this, 'ShowHiddenFiles').get('value');
-    var showFileExtensions = scheme.find(this, 'ShowFileExtensions').get('value');
+    // Other
+    var sm = OSjs.Core.getSettingsManager();
+    var vfsSettings = {
+      scandir: {
+        showHiddenFiles: scheme.find(this, 'ShowHiddenFiles').get('value'),
+        showFileExtensions: scheme.find(this, 'ShowFileExtensions').get('value')
+      }
+    };
+
+    var tmpPaths = scheme.find(this, 'SearchPaths').get('entry', null, null, true).sort();
+    var paths = [];
+
+    function isChildOf(tp) {
+      var result = false;
+      paths.forEach(function(p) {
+        if ( !result ) {
+          result = tp.substr(0, p.length) === p;
+        }
+      });
+      return result;
+    }
+
+    tmpPaths.forEach(function(tp) {
+      var c = isChildOf(tp);
+      if ( c ) {
+        wm.notification({
+          title: API._('LBL_SEARCH'),
+          message: _('Search path \'{0}\' is already handled by another entry', tp)
+        });
+      }
+
+      if ( !paths.length || !c ) {
+        paths.push(tp);
+      }
+
+    });
+
+    var searchSettings = {
+      applications: scheme.find(this, 'SearchEnableApplications').get('value'),
+      files: scheme.find(this, 'SearchEnableFiles').get('value'),
+      paths: paths
+    };
 
     wm.applySettings(this.settings, false, function() {
-      OSjs.Core.getSettingsManager().instance('VFS').set(null, {
-        scandir: {
-          showHiddenFiles: showHiddenFiles,
-          showFileExtensions: showFileExtensions
-        }
-      }, true);
-    });
+      sm.instance('VFS').set(null, vfsSettings, false, false);
+      sm.instance('SearchEngine').set(null, searchSettings, true, false);
+    }, false);
   };
 
   /////////////////////////////////////////////////////////////////////////////
@@ -854,17 +756,23 @@
     return Application.prototype.destroy.apply(this, arguments);
   };
 
-  ApplicationSettings.prototype.init = function(settings, metadata, onInited) {
+  ApplicationSettings.prototype.init = function(settings, metadata) {
     Application.prototype.init.apply(this, arguments);
 
     var self = this;
     var url = API.getApplicationResource(this, './scheme.html');
     var scheme = GUI.createScheme(url);
     var category = this._getArgument('category') || settings.category;
-    scheme.load(function(error, result) {
-      self._addWindow(new ApplicationSettingsWindow(self, metadata, scheme, category));
 
-      onInited();
+    scheme.load(function(error, result) {
+      var win = self._addWindow(new ApplicationSettingsWindow(self, metadata, scheme, category));
+
+      self._on('attention', function(args) {
+        if ( win && args.category ) {
+          win.setContainer(args.category, true);
+          win._focus();
+        }
+      });
     });
 
     this._setScheme(scheme);
@@ -876,24 +784,12 @@
     }
   };
 
-  ApplicationSettings.prototype._onMessage = function(obj, msg, args) {
-    Application.prototype._onMessage.apply(this, arguments);
-
-    if ( this.__mainwindow ) {
-      var win = this._getWindow(null);
-      if ( msg === 'attention' && args.category ) {
-        win.setContainer(args.category, true);
-        win._focus();
-      }
-    }
-  };
-
   /////////////////////////////////////////////////////////////////////////////
   // EXPORTS
   /////////////////////////////////////////////////////////////////////////////
 
   OSjs.Applications = OSjs.Applications || {};
   OSjs.Applications.ApplicationSettings = OSjs.Applications.ApplicationSettings || {};
-  OSjs.Applications.ApplicationSettings.Class = ApplicationSettings;
+  OSjs.Applications.ApplicationSettings.Class = Object.seal(ApplicationSettings);
 
 })(OSjs.Core.Application, OSjs.Core.Window, OSjs.Utils, OSjs.API, OSjs.VFS, OSjs.GUI);

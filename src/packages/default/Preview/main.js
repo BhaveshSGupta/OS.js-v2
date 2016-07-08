@@ -63,13 +63,17 @@
 
     if ( result ) {
       if ( file.mime.match(/^image/) ) {
-        this._scheme.create(self, 'gui-image', {src: result}, root, {onload: function() {
-          self._resizeTo(this.offsetWidth, this.offsetHeight, true, false, this);
-        }});
+        this._scheme.create(self, 'gui-image', {src: result}, root, {
+          onload: function() {
+            self._resizeTo(this.offsetWidth, this.offsetHeight, true, false, this);
+          }
+        });
       } else if ( file.mime.match(/^video/) ) {
-        this._scheme.create(self, 'gui-video', {src: result, controls: true, autoplay: true}, root, {onload: function() {
-          self._resizeTo(this.offsetWidth, this.offsetHeight, true, false, this);
-        }});
+        this._scheme.create(self, 'gui-video', {src: result, controls: true, autoplay: true}, root, {
+          onload: function() {
+            self._resizeTo(this.offsetWidth, this.offsetHeight, true, false, this);
+          }
+        });
       }
     }
 
@@ -89,9 +93,9 @@
   ApplicationPreview.prototype = Object.create(DefaultApplication.prototype);
   ApplicationPreview.constructor = DefaultApplication;
 
-  ApplicationPreview.prototype.init = function(settings, metadata, onInited) {
+  ApplicationPreview.prototype.init = function(settings, metadata) {
     var self = this;
-    DefaultApplication.prototype.init.call(this, settings, metadata, onInited, function(scheme, file) {
+    DefaultApplication.prototype.init.call(this, settings, metadata, function(scheme, file) {
       self._addWindow(new ApplicationPreviewWindow(self, metadata, scheme, file));
     });
   };
@@ -102,6 +106,6 @@
 
   OSjs.Applications = OSjs.Applications || {};
   OSjs.Applications.ApplicationPreview = OSjs.Applications.ApplicationPreview || {};
-  OSjs.Applications.ApplicationPreview.Class = ApplicationPreview;
+  OSjs.Applications.ApplicationPreview.Class = Object.seal(ApplicationPreview);
 
 })(OSjs.Helpers.DefaultApplication, OSjs.Helpers.DefaultApplicationWindow, OSjs.Core.Application, OSjs.Core.Window, OSjs.Utils, OSjs.API, OSjs.VFS, OSjs.GUI);

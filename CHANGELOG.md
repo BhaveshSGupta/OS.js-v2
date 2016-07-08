@@ -1,3 +1,476 @@
+# 2.0.0-alpha77
+
+A ton of new features, massive amount of cleanups. General bugfixes and improvements
+to documentation and developer features.
+
+Relevant:
+
+- http://community.os.js.org/t/features-extending-base-css/65
+- http://community.os.js.org/t/notice-node-server-api-changes/73
+- http://community.os.js.org/t/features-package-less-and-custom-script-support/72
+
+Digest:
+
+* Core: New 'Process' event system
+* Core: Better handling of autostarting
+* Core: Added more internal hooks
+* CoreWM: Improvements to smaller screen support
+* CoreWM: window list panel item now has context menu from actual window
+* CoreWM: Rewritten panel CSS implementation (better scaling and rotation support)
+* CoreWM: Better touch menu handling
+* CoreWM: Proper hotkey handling via configs
+* CoreWM: Fixed wrong calculation of desktop area when panel is on bottom
+* CoreWM: Trigger `resize()` when responsive design kicks in/out
+* CoreWM: CSS improvements
+* settings-manager: bugfixes
+* dialogs: Better handling of 'markdown-ish' messages
+* window: Added 'inited' hook/signal
+* WindowManager: Prevent crash when `Window::init` fails
+* Themes: Support for custom base LESS files
+* GUI: Disabled spell-shecking etc by default from textual inputs
+* GUI: Cleanups of some methods
+* GUI: Added scoped `son()` for events so you can bind context
+* GUI: Added `get('selected')` to 'gui-tabs'
+* GUI: 'gui-fileview' no longer shows empty columns on '0 bytes'
+* GUI: Prevent error on invalid triggers in 'Scheme'
+* GUI: Scheme now supports using `app://` to load `src` attributes
+* GUI: 'gui-list-view' now behaves as a table
+* GUI: Bugfixes in Scheme
+* UI: Better `user-select` CSS
+* Handler: Exposed `saveSession()``
+* API: Better application shutdown API
+* API: Fixes to `getThemeResource()`
+* API: Cleanups
+* Utils: `$index()` now checks elements to prevent errors
+* Utils: `dirname()` bugfixes
+* Utils: Added `$parent()` function
+* Utils: Added `keyCombination()` function
+* Utils: Improved preloader
+* VFS: Throw exceptions as early as possible in the API chain
+* VFS: Improved copying between different mountpoints
+* VFS: Updated signals and error handling
+* VFS: Cleanups
+* locales: Updated vi_VN
+* server-node: Moved core code into 'core' directory
+* server-node: Better commandline option support
+* server-node: Some improvements to `scandir()`
+* server-node: Display correct url when launching server
+* server-node: Added uncaughtException handler
+* server-node: Refactoring of entire API chain method arguments
+* server-node: Cleanups and bugfixes
+* build: Improved windows support in build scripts
+* build: Added support for append version string in resources
+* build: Customizable watermarks
+* build: Support for LESS files in applications
+* build: Support for custom before/after scripts in application build process
+* misc: More work on developer environment
+* misc: Updated unit tests
+* misc: Updated bithoundrc
+* misc: Fixed typos in documentation
+* misc: Updated docs
+
+# 2.0.0-alpha76
+
+Search Engine, HTTP/2 support, bugfixes, improvements
+
+- http://community.os.js.org/t/quick-tips-window-events/47/1
+- http://community.os.js.org/t/feature-search-engine/43
+- http://community.os.js.org/t/feature-http-v2/44/2
+
+This update brings you a new Search Engine implementation, HTTP/2 support, lots of bugfixes
+and general impreovements. Also a new HTML Viewer application.
+
+* Core: Implemented Search Engine
+* API: Prevent `Script Error Line 0` error
+* GUI: Fixed a bug in ListView where wrong element was removed
+* GUI: DataView now has `get('entry')` for getting all entries
+* HTMLViewer: New application
+* CoreWM: Added support for custom labels on desktop iconview entires
+* CoreWM: Better resizing of windows
+* CoreWM: Cleanups
+* CoreWM: Fixed a case where custom CSS was not generated properly
+* CoreWM: Prevent applySetting from triggering on watches
+* CoreWM: Added search panel item
+* CoreWM: Support dynamic CSS media queries
+* CoreWM: Better panel scaling
+* Settings: Prevent errors when selecting non-existing category
+* VFS: Regenerate user metadata when you remove a user-installed package
+* VFS: Added 'searhable' mountpoint attribute
+* VFS: Added 'find()' method
+* windows: Better hooks API
+* server-node: Now supports HTTP/2
+* handlers: Reduce codesize with traits
+* misc: Cleanups and general code improvements
+* misc: Some fixes for IE
+* build: Support CSS map files
+* build: Remove some deprecated stuff
+* build: Configurable media queries
+* doc: Updated handler docs
+* doc: Updated API docs
+
+# 2.0.0-alpha75
+
+Bugfixes, Locale updates, Security and general improvements.
+
+* API: Prevent error when preload list is empty
+* API: Fixed dependencies being loaded in wrong order
+* API: Added 'onApplicationPreload' hook
+* API: getApplicationResource can now return VFS path
+* GUI: Improved error handling in FileView
+* GUI: Menu now opens subitems to the left if they escape the viewport
+* GUI: gui-iframe now has automatic webview detection
+* VFS: registerMountpoint now respects the 'enabled' property
+* VFS: Fix upload problems in #364
+* VFS: Fixed error handling where some code lead to false-positives
+* Utils: Added 'asyncs' method
+* Utild: 'dirname' no longer throws error on empty input
+* Core: Added lots of freezing/sealing of object to make things immutable
+* CoreWM: Update locale properly on saving of settings (visual bug)
+* CoreWM: Application list generation now uses 'visible' metadata property
+* CoreWM: Moved window switcher to 'ALT+TILDE'
+* CoreWM: Added support for modifying shortcuts on desktop (via dialog)
+* Calculator: Added Infinity check
+* FileManager: Fixed . triggering DELETE key
+* package-manager: Added support for adding dummy packages on runtime
+* package-manager: Immutable getters
+* process: Added _getResource(str) shortcut
+* application: Added _loadScheme() shortcut
+* Locales: Updated vi_VN
+* Locales: Updated fa_FA
+* Locales: Updated fr_FR
+* Locales: Updated nl_NL
+* server-node: Added system login abstraction to handler
+* server-node: Updated PAM handler
+* server-node: Added 'Shadow' handler
+* server-node: Default Handler can now handle directory formatting properly
+* server-node: Added colored logging output
+* server-node: Updated internal proxy support
+* server-node: Now uses tmpdir defined in config
+* server-node: Improved file uploading support
+* intel-edison: Now uses the shadow handler
+* intel-edison: Updated support and filesystem
+* build: Updated intel-edison support
+* build: Updated package build support (ex, arduino, edison, raspi)
+* build: opkg templates updated
+* build: Now using grunt-contrib-validate-xml for Scheme validation
+* build: Icon Packs now support 'parent' theme
+* build: Added 'grunt packages:list' task
+* build: Fixed usage on wrong identifier for autostart generation
+* doc: Updated documentation
+* doc: Updated README
+* doc: Updated INSTALL
+* doc: New Screenshot in README
+* misc: Updated dependencies
+
+# 2.0.0-alpha74
+
+New wallpaper, UI improvements, bugfixes and many improvements to the build system(s). Also new developer features!
+
+**API CHANGE**: http://community.os.js.org/t/notice-updated-gui-methods/33
+
+**API CHANGE**: http://community.os.js.org/t/notice-recent-api-changes/31
+
+* UI: New Wallpaper
+* UI: Added loading bar to boot
+* UI: Added WAI-ARIA support
+* UI: Schemes can now change window properties (like dimensions)
+* GUI: Fixed menu not disappearing in certain cases
+* GUI: Added `getNextElement()` helper method
+* GUI: Better `show()` and `hide()` methods for GUI Elements
+* GUI: GUI Elements now has `appendHTML()` method
+* GUI: GUI Elements now has `remove()` and `empty()` methods
+* GUI: `append()` in GUI Elements now builds items correctly (when doing it dynamically)
+* GUI: Added minimum sizes to some containers where missing
+* GUI: gui-image src checked if null
+* GUI: Fixed radios not getting unselected properly
+* GUI: Better Scheme APIs
+* GUI: Added DnD support to TreeView
+* GUI: Updated gui-richtext error handling
+* GUI: Updated gui-paned-view resize events to be more precise
+* GUI: All elements now support clipboard
+* GUI: Better DataView abstractions for ease of development (extensions)
+* API: Updated cURL method with new functionality
+* API: Added onhashchange support for application messaging
+* API: Deprecated `Application::_call()` in favour of `Application::_api()`
+* API: `API.call()` now has pattern `=> fn(err, res)`
+* API: Moved `API::createDraggable()` to `GUI::Helpers::createDraggable()`
+* API: Moved `API::createDroppable()` to `GUI::Helpers::createDroppable()`
+* Dialogs: Prevent HTML injection in confirm dialog
+* Dialogs: Focus the 'abort' button by default
+* Windows: Updated next tab support
+* Windows: Added `_find()` shortcut for scheme
+* Windows: Added `_findByQuery()` shortcut for scheme
+* Utils: Better $hasClass
+* ProcessViewer: Remaned forgotten file
+* MusicPlayer: Updated compability
+* FileManager: Now has clipboard support
+* FileManager: Added new keyboard shortcuts
+* Calculator: Focus is now always on the input field
+* locales: Added missing it_IT translations
+* locales: Improved ru_RU translations
+* package-manager: Better extension support
+* package-manager: Updated user-installed package support
+* platform: Updated edison support
+* build: Updated NW support
+* build: Removed all dist files, now generated from template
+* build: Updated config generation and setting
+* build: Updated manifest generation
+* build: Fixed setting configs with leading zeroes
+* build: Metadata now supports `uses` property
+* build: Metadata now supports `depends` property
+* build: Apache files now generated with proxies from config
+* build: Enabling/Disabling packages now happends in config, not manifest
+* server-node: Added 'rawtype' option to `VFS::write()`
+* server-node: Prevent crash when loading of extension fails
+* server-node: Added support for proxies
+* server-node: Now supports spawning child processes
+* server-node: Now uses proper sessions via cookie
+* config: Updated to relative paths
+* misc: Updated Travis support
+* misc: Updated Vagrant support
+* misc: Updated Docker support
+* misc: Updated packages.json dependencies
+* misc: Updated MIME database
+* misc: Cleanups
+* doc: Updated CONTRIBUTING
+* doc: Updated README
+* doc: Updated INSTALL
+* doc: Updated homepage
+* doc: Updated docs
+
+# 2.0.0-alpha73
+
+A ton of fixes, improvements and developer support updates!
+
+Now also supports Intel Edison platforms.
+
+* GUI: Better touch support
+* GUI: Better scaling support
+* GUI: Added media-queries for devices <800px
+* GUI: gui-grid now dynamic
+* GUI: Added some more generics to CSS (like % containers)
+* API: Added relaunc() to relaunch/reload apps
+* API: getIcon() should now always return proper file icons
+* VFS: General improvements
+* VFS: WebDAV implementation complete
+* VFS: Better handling of copy/move between identical transports
+* VFS: General improvements
+* About: Rewritten
+* Preview: Fixed video position
+* Calculator: Refactored completely
+* Settings: Package Management moved to its own app
+* Settings: Now only shows physically loaded languages
+* CoreWM: Updated weather panel item
+* CoreWM: Updated windowlist panel item
+* CoreWM: Cleaned up CSS
+* CoreWM: Fixed loading indicators
+* CoreWM: Updated touch menu
+* CoreWM: Improved notification area
+* CoreWM: No longer shows handles on non-resizable windows
+* CoreWM: Improved resize clamping
+* CoreWM: Simplified Window HTML markup a bit
+* FileManager: Added create connection dialog
+* iframe-application: Better initialization
+* iframe-application: Better bi-directional communications support
+* dialogs: Support for creating from custom callback and scheme
+* utils: Added `acceptcodes` to XHR call
+* handlers: Updated init() patterns
+* handlers: Updated NW support
+* handlers: Simplified integration
+* handlers: Now supports blacklisting of apps
+* handlers: Now reads settings from src/conf
+* handlers: Better mysql handler
+* handlers: bcrypt in mysql handler
+* handlers: Demo handler fixes for PHP
+* locales: Updated en_EN
+* locales: Updated fr_FR
+* locales: Updated ko_KR
+* server-node: Updated APIs
+* server-node: Better extension support
+* server-node: Fixed where curl would returned garbled binaries
+* server-node: Bugfixes
+* server-node: Updated HTTP return codes
+* server-node: Deny deletion of protocol root dirs
+* server-node: Better logging
+* server-php: Deny deletion of protocol root dirs
+* build: Added support for generating Handlers
+* build: Grunt now handles extensions better
+* build: Renamed `package.json` to `metadata.json` for apps
+* build: Better package extension support
+* build: Added `autostart` parameter to package metadata
+* build: Better feedback on grunt create-package tasks
+* build: Now supports making opkg dists
+* build: Better deb dist support
+* build: Includes a "packaging" script
+* doc: Updated INSTALL
+* doc: Updated README
+* doc: Updated CONTRIBUTING
+* doc: Updated all platform docs
+* doc: Updated all installation docs
+* doc: Updated code docs
+* misc: Added .github (new) features
+* misc: Updated templates
+* misc: Removed deprecated methods
+* misc: Updated browser compabilty
+* misc: Fixed some possible vulnerabilities
+* platform: Now fully supports Intel Edison
+
+# 2.0.0-alpha72
+
+New Logo, Moved repo to organization, Better privilege and group support, a ton of bugfixes and improvements!
+
+* Calculator: Updates
+* Writer: Updates
+* FileManager: Locale updates
+* FileManager: UI improvements and better VFS triggers
+* CoreWM: Improved notifications
+* CoreWM: When shut down, settings are reset to defaults
+* CoreWM: Fixed desktop shortcuts
+* CoreWM: Fixed loading indicators
+* Draw: Locale updates and bugfixes
+* dialogs: Updated File dialog, bugfixes
+* dialogs: API::createDialog() now has default callback
+* windowmanager: Bugfixes
+* windownanager: Clamp resize values when resizing
+* gui: StatusBar improvements
+* gui: PanedView improvements
+* gui: FileView improvements and fixes
+* gui: Updated login screen look
+* scheme: Bugfixes
+* handler: Improved API
+* handler: Updated NW support
+* handler: Included server handlers now use bcrypt
+* settings-manager: Improved saving
+* application: _onMessage() now returns boolean
+* application: Moved get/set Argument functions down to process
+* iframe-application: IE/Edge improvements
+* default-application: Added CTRL+S shortcut
+* default-application: Added CTRL+O shortcut
+* zip-archiver: Added removal support and many fixes and improvements
+* vfs: Added 'Blob' support
+* vfs: Added support for custom mountpoints via client API
+* vfs: Added WebDAV support
+* vfs: Overhault of apis
+* vfs: Support for HTTP reads over general api
+* vfs: Better handling of datauri data transfers
+* vfs: File upload abstraction improvements
+* api: HTTP API URI overhalut (entirely new and improved)
+* server-node: Now has checkserver-nodePrivilege
+* server-node: Now has checkVFSPrivilege
+* server-node: Now has checkPackagePrivilege
+* server-node: Added exif info in fileinfo()
+* server-node: Added permission info in fileinfo()
+* server-node: General improvements and cleanups
+* server: Reworked handler server integration
+* themes: Some Firefox related fixes
+* themes: updated Wallpaper
+* themes: updated favicon
+* themes: Updated 'Material' theme
+* locales: Added Portuguese (pt_BR)
+* locales: Added Korean (ko_KR)
+* locales: Updated French (fr_FR)
+* locales: Updated Polish (pl_PL)
+* utils: XHR call now has timeout argument
+* utils: XHR IE/Edge updates
+* utils: Added parseurl() function
+* build: Added 'ReloadOnShutdown' client config
+* build: Updated Windows symlinks script
+* build: Grunt compress task now also does core files
+* build: Improved Windows support
+* build: Added support for creating dummy packages
+* build: Updated Gruntfile
+* build: Improved 'dist' file generation
+* build: Updated unit-tests
+* build: CSS is now also linted
+* build: Code style check improvements
+* build: Now places manifest in server dir for backend as well
+* build: Support for custom server src/conf entries
+* misc: Added .editorconfig
+* misc: Updated installer scripts
+* misc: Updated locales overall
+* misc: Code file-tree updates
+* misc: Removed deprecated code
+* misc: Cleaned up a lot of stuff
+* misc: Improved error logging
+* misc: Updated Vagrantfile
+* misc: Added new error handling to async functions
+* misc: jshint
+* misc: Updated MIME database
+* misc: Moved some dependencies to devDependencies
+* doc: Updated README
+* doc: Updated INSTALL
+* doc: Added logo SVG sources
+* doc: Added complete node backend documentation
+* doc: Cleaned up all documentation
+* doc: Updated bithoundrc
+* doc: Updated package.json
+* doc: Updated badges
+
+# 2.0.0-alpha71
+
+OS.js exploded on social media and there was a lot of activity. This is just a digest of all the changes.
+
+Thanks to everyone for helping out :-)
+
+* server-php: Now returns ISO8601 dates
+* server-node: VFS::upload() now respects 'overwrite' flag
+* server-node: Separation of all backend logic
+* zip-archiver: Added add() and list() support and other improvements
+* FileManager: Added read-only symbol in list and other improvements
+* ProcessViewer: Fixed column sizes
+* Draw: Bugfixes
+* Calculator: Bugfixes
+* CoreWM: Clock PanelItem now has configurable tooltip
+* Window: Some improvments to async handling
+* Application: _getMainWindow() now returns actual window
+* GUI: ListView improvements
+* GUI: FileView improvements
+* GUI: General improvements
+* GUI: StatusBar improvements
+* GUI: Richtext improvements
+* Dialogs: File dialog improvements
+* VFS: Dropbox now has proper timeout for requests
+* VFS: upload() now has support for custom parameters
+* Utils: Added Utils::$escape()
+* themes: Added material theme
+* locales: Updated en_EN
+* locales: Updated pl_PL
+* locales: Updated vi_VN
+* locales: Updated nl_NL
+* locales: Updated fr_FR
+* locales: Added tr_TR
+* locales: Added bg_BG
+* locales: Added sk_SK
+* misc: Lots of bugfixes
+* misc: All windows should now get focus back after dialog close
+* misc: You can now run server helper scripts from any cwd
+* misc: Renamed example-handler to mysql-handler
+* misc: linting and style updates to entire codebase
+* misc: General async improvements leading to less triggered errors
+* misc: Updated MIME maps
+* misc: A lot of cleanups
+* misc: New logo!
+* build: You can now set config via `grunt config:set`
+* build: You can now get config via `grunt config:get`
+* build: You can now add preloads with `grunt config:preload`
+* build: You can now write generated configs to a specified file
+* build: jscs now part of testing
+* build: Travis CI
+* build: Standalone improvements
+* build: Added NW support
+* build: Updated X11 support
+* build: Added debian package build support
+* build: Removed deprecated Grunt tasks
+* doc: Updated copyright to 2016
+* doc: Ensure consistency in code license headers
+* doc: Updated codebase docs
+* doc: Updated README
+* doc: Updated INSTALL
+* doc: Updated CONTRIBUTING.md
+* doc: Updated doc/NW.md
+* doc: Updated doc/X11.md
+* doc: Updated doc/*-handler.md
+
 # 2.0.0-alpha70
 
 Tons of improvments to build system, bugfixes and general improvements.
@@ -357,7 +830,7 @@ Bugfixes, build system updates, size reduction, new API helpers, touch event com
 Also features the new IFrame Applications which help developers EASILY create applications that not
 relies on OS.js APIs. You can convert your existing JavaScript application in no-time :)
 
-http://os.js.org/doc/tutorials/iframe-application.html
+https://os.js.org/doc/tutorials/iframe-application.html
 
 * API: Added IFrameApplication helper
 * API: Added IFrameApplicationWindow helper

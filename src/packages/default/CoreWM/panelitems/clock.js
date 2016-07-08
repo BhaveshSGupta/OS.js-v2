@@ -69,8 +69,8 @@
   /**
    * PanelItem: Clock
    */
-  var PanelItemClock = function(settings) {
-    PanelItem.apply(this, ['PanelItemClock PanelItemFill PanelItemRight', 'Clock', settings, {
+  function PanelItemClock(settings) {
+    PanelItem.apply(this, ['PanelItemClock corewm-panel-right', 'Clock', settings, {
       utc: false,
       interval: 1000,
       format: 'H:i:s',
@@ -78,9 +78,11 @@
     }]);
     this.clockInterval  = null;
     this.$clock = null;
-  };
+  }
 
   PanelItemClock.prototype = Object.create(PanelItem.prototype);
+  PanelItemClock.constructor = PanelItem;
+
   PanelItemClock.Name = 'Clock'; // Static name
   PanelItemClock.Description = 'View the time'; // Static description
   PanelItemClock.Icon = 'status/appointment-soon.png'; // Static icon
@@ -99,6 +101,7 @@
         var d = OSjs.Helpers.Date.format(now, tooltipFmt);
         Utils.$empty(clock);
         clock.appendChild(document.createTextNode(t));
+        clock.setAttribute('aria-label', String(t));
         clock.title = d;
       }
     }
@@ -110,22 +113,6 @@
       }, interval);
     }
 
-    // Forces width of the element by calculating the length of the string in pixels
-    // It is not perfect, but works in most cases.
-    /*
-    var tst = OSjs.Helpers.Date.format(new Date(), fmt).replace(/[A-z0-9]/g, '8');
-    var tstEl = document.createElement('span');
-    tstEl.style.visibility = 'hidden';
-    tstEl.appendChild(document.createTextNode(tst));
-    document.body.appendChild(tstEl);
-    if ( tstEl.offsetWidth ) {
-      clock.style.width = tstEl.offsetWidth.toString() + 'px';
-    } else {
-      clock.style.width = '';
-    }
-    tstEl = Utils.$remove(tstEl);
-    */
-
     create(this._settings.get('interval'));
     update();
   };
@@ -133,9 +120,13 @@
   PanelItemClock.prototype.init = function() {
     var root = PanelItem.prototype.init.apply(this, arguments);
 
-    this.$clock = document.createElement('div');
+    this.$clock = document.createElement('span');
     this.$clock.innerHTML = '00:00:00';
-    root.appendChild(this.$clock);
+    this.$clock.setAttribute('role', 'button');
+
+    var li = document.createElement('li');
+    li.appendChild(this.$clock);
+    this._$container.appendChild(li);
 
     this.createInterval();
 

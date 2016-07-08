@@ -31,8 +31,6 @@
   // jscs:disable validateQuoteMarks
   'use strict';
 
-  OSjs.Locales = OSjs.Locales || {};
-
   OSjs.Locales.bg_BG = {
     //
     // CORE
@@ -375,7 +373,8 @@
     'LBL_BUGREPORT' : 'Áúã-ðåïîðò',
     'LBL_INSTALL' : 'Èíñòàëèðàé',
     'LBL_UPDATE' : 'Àêòóàëèçèðàé',
-    'LBL_REMOVE' : 'Ïðåìàõíè'
+    'LBL_REMOVE' : 'Ïðåìàõíè',
+    'LBL_SHOW_SIDEBAR' : 'покажи страничен бар'
   };
 
 })();

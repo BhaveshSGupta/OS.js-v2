@@ -31,8 +31,6 @@
   // jscs:disable validateQuoteMarks
   'use strict';
 
-  OSjs.Locales = OSjs.Locales || {};
-
   OSjs.Locales.de_DE = {
     'ERR_FILE_OPEN'     : 'Fehler beim Öffnen der Datei',
     'ERR_WM_NOT_RUNNING': 'Fenster-Manager wird nicht ausgeführt',
@@ -272,7 +270,8 @@
     'LBL_ORDERED_LIST'  : 'Sortierte Liste',
     'LBL_BACKGROUND_IMAGE' : 'Hintergrundbild',
     'LBL_BACKGROUND_COLOR' : 'Hintergrundfarbe',
-    'LBL_UNORDERED_LIST'   : 'Unsortierte Liste'
+    'LBL_UNORDERED_LIST'   : 'Unsortierte Liste',
+    'LBL_SHOW_SIDEBAR' : 'Seitenleiste anzeigen'
   };
 
 })();

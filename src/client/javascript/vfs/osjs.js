@@ -30,67 +30,52 @@
 (function(Utils, API) {
   'use strict';
 
-  window.OSjs       = window.OSjs       || {};
-  OSjs.VFS          = OSjs.VFS          || {};
-  OSjs.VFS.Modules  = OSjs.VFS.Modules  || {};
+  /**
+   * @namespace OSjs
+   * @memberof OSjs.VFS.Transports
+   */
 
   /////////////////////////////////////////////////////////////////////////////
   // API
   /////////////////////////////////////////////////////////////////////////////
 
-  var OSjsStorage = {};
-  OSjsStorage.url = function(item, callback) {
-    var root = window.location.pathname || '/';
-    if ( root === '/' || window.location.protocol === 'file:' ) {
-      root = '';
-    }
+  /*
+   * OSjs 'dist' VFS Transport Module
+   *
+   * This is just a custom version of 'Internal' module
+   */
+  var Transport = {
+    url: function(item, callback) {
+      var root = window.location.pathname || '/';
+      if ( root === '/' || window.location.protocol === 'file:' ) {
+        root = '';
+      }
 
-    var url = item.path.replace(OSjs.VFS.Modules.OSjs.match, root);
-    callback(false, url);
+      var module = OSjs.VFS.Modules[OSjs.VFS.getModuleFromPath(item.path)];
+      var url = item.path.replace(module.match, root);
+      callback(false, url);
+    }
   };
 
-  /////////////////////////////////////////////////////////////////////////////
-  // WRAPPERS
-  /////////////////////////////////////////////////////////////////////////////
-
-  function makeRequest(name, args, callback, options) {
-    args = args || [];
-    callback = callback || {};
-
-    var restricted = ['write', 'copy', 'move', 'unlink', 'mkdir', 'exists', 'fileinfo', 'trash', 'untrash', 'emptyTrash'];
-    if ( OSjsStorage[name] ) {
-      var fargs = args;
-      fargs.push(callback);
-      fargs.push(options);
-      return OSjsStorage[name].apply(OSjsStorage, fargs);
-    } else if ( restricted.indexOf(name) !== -1 ) {
-      return callback(API._('ERR_VFS_UNAVAILABLE'));
+  // Inherit non-restricted methods
+  var restricted = ['write', 'copy', 'move', 'unlink', 'mkdir', 'exists', 'fileinfo', 'trash', 'untrash', 'emptyTrash', 'freeSpace'];
+  var internal = OSjs.VFS.Transports.Internal.module;
+  Object.keys(internal).forEach(function(n) {
+    if ( restricted.indexOf(n) === -1 ) {
+      Transport[n] = internal[n];
     }
-    OSjs.VFS._NullModule.request.apply(null, arguments);
-  }
+  });
 
   /////////////////////////////////////////////////////////////////////////////
   // EXPORTS
   /////////////////////////////////////////////////////////////////////////////
 
-  OSjs.VFS.Modules.OSjs = OSjs.VFS.Modules.OSjs || {
-    readOnly: true,
-    description: 'OS.js',
-    root: 'osjs:///',
-    match: /^osjs\:\/\//,
-    icon: 'devices/harddrive.png',
-    visible: true,
-    internal: true,
-    unmount: function(cb) {
-      OSjs.VFS._NullModule.unmount(cb);
-    },
-    mounted: function() {
-      return true;
-    },
-    enabled: function() {
-      return true;
-    },
-    request: makeRequest
+  OSjs.VFS.Transports.OSjs = {
+    module: Transport,
+    defaults: function(opts) {
+      opts.readOnly = true;
+      opts.searchable = true;
+    }
   };
 
 })(OSjs.Utils, OSjs.API);

@@ -30,59 +30,38 @@
 (function() {
   'use strict';
 
-  window.OSjs = window.OSjs || {};
+  /**
+   * @namespace Core
+   * @memberof OSjs
+   */
+
+  /**
+   * @namespace Utils
+   * @memberof OSjs
+   */
+
+  /**
+   * @namespace Helpers
+   * @memberof OSjs
+   */
 
   var handler    = null;
   var loaded     = false;
   var inited     = false;
   var signingOut = false;
 
-  /////////////////////////////////////////////////////////////////////////////
-  // COMPABILITY
-  /////////////////////////////////////////////////////////////////////////////
-
   // Make sure these namespaces exist
-  (['API', 'GUI', 'Core', 'Dialogs', 'Helpers', 'Applications', 'Locales', 'VFS']).forEach(function(ns) {
+  (['Utils', 'API', 'GUI', 'Core', 'Dialogs', 'Helpers', 'Applications', 'Locales', 'VFS', 'Extensions']).forEach(function(ns) {
     OSjs[ns] = OSjs[ns] || {};
   });
 
-  // For browsers without "console" for some reason
-  (function() {
-    window.console    = window.console    || {};
-    console.log       = console.log       || function() {};
-    console.debug     = console.debug     || console.log;
-    console.error     = console.error     || console.log;
-    console.warn      = console.warn      || console.log;
-    console.group     = console.group     || console.log;
-    console.groupEnd  = console.groupEnd  || console.log;
-  })();
+  (['Elements', 'Helpers']).forEach(function(ns) {
+    OSjs.GUI[ns] = OSjs.GUI[ns] || {};
+  });
 
-  // Compability
-  (function() {
-    if ( window.HTMLCollection ) {
-      window.HTMLCollection.prototype.forEach = Array.prototype.forEach;
-    }
-    if ( window.NodeList ) {
-      window.NodeList.prototype.forEach = Array.prototype.forEach;
-    }
-    if ( window.FileList ) {
-      window.FileList.prototype.forEach = Array.prototype.forEach;
-    }
-
-    (function() {
-      function CustomEvent(event, params) {
-        params = params || { bubbles: false, cancelable: false, detail: undefined };
-        var evt = document.createEvent( 'CustomEvent' );
-        evt.initCustomEvent( event, params.bubbles, params.cancelable, params.detail );
-        return evt;
-      }
-
-      if ( window.navigator.userAgent.match(/MSIE|Edge|Trident/) ) {
-        CustomEvent.prototype = window.Event.prototype;
-        window.CustomEvent = CustomEvent;
-      }
-    })();
-  })();
+  (['Transports', 'Modules']).forEach(function(ns) {
+    OSjs.VFS[ns] = OSjs.VFS[ns] || {};
+  });
 
   /////////////////////////////////////////////////////////////////////////////
   // GLOBAL EVENTS
@@ -99,6 +78,9 @@
     },
     body_mousedown: function(ev) {
       ev.preventDefault();
+    },
+
+    body_click: function(ev) {
       OSjs.API.blurMenu();
     },
 
@@ -106,8 +88,16 @@
       if ( ev && ev.data && typeof ev.data.wid !== 'undefined' && typeof ev.data.pid !== 'undefined' ) {
         console.debug('window::message()', ev.data);
         var proc = OSjs.API.getProcess(ev.data.pid);
-        var win  = proc._getWindow(ev.data.wid, 'wid');
-        win.onPostMessage(ev.data.message, ev);
+        if ( proc ) {
+          if ( typeof proc.onPostMessage === 'function' ) {
+            proc.onPostMessage(ev.data.message, ev);
+          }
+
+          var win  = proc._getWindow(ev.data.wid, 'wid');
+          if ( win ) {
+            win.onPostMessage(ev.data.message, ev);
+          }
+        }
       }
     },
 
@@ -136,6 +126,15 @@
       var wm  = OSjs.Core.getWindowManager();
       var win = wm ? wm.getCurrentWindow() : null;
 
+      function sendKey(special) {
+        if ( wm ) {
+          wm.onKeyDown(ev, win, special);
+          if ( win ) {
+            return win._onKeyEvent(ev, 'keydown', special);
+          }
+        }
+      }
+
       function checkPrevent() {
         var d = ev.srcElement || ev.target;
         var doPrevent = d.tagName === 'BODY' ? true : false;
@@ -155,23 +154,32 @@
         return false;
       }
 
-      if ( checkPrevent() ) {
+      function checkShortcut() {
+        if ( ((ev.keyCode === 115 || ev.keyCode === 83) && ev.ctrlKey) || ev.keyCode === 19 ) {
+          if ( ev.shiftKey ) {
+            return 'saveas';
+          } else {
+            return 'save';
+          }
+        } else if ( (ev.keyCode === 79 || ev.keyCode === 83) && ev.ctrlKey ) {
+          return 'open';
+        }
+        return false;
+      }
+
+      var shortcut = checkShortcut();
+      if ( checkPrevent() || shortcut ) {
         ev.preventDefault();
       }
 
       // WindowManager and Window must always recieve events
-      if ( wm ) {
-        wm.onKeyDown(ev, win);
-
-        if ( win ) {
-          return win._onKeyEvent(ev, 'keydown');
-        }
-      }
+      sendKey(shortcut);
 
       return true;
     },
     keypress: function(ev) {
       var wm = OSjs.Core.getWindowManager();
+
       if ( wm ) {
         var win = wm.getCurrentWindow();
         if ( win ) {
@@ -206,13 +214,13 @@
     resize: (function() {
       var _timeout;
 
-      function _resize(ev) {
+      function _resize(ev, wasInited) {
         var wm = OSjs.Core.getWindowManager();
         if ( !wm ) { return; }
-        wm.resize(ev, wm.getWindowSpace());
+        wm.resize(ev, wm.getWindowSpace(), wasInited);
       }
 
-      return function(ev) {
+      return function(ev, wasInited) {
         if ( _timeout ) {
           clearTimeout(_timeout);
           _timeout = null;
@@ -220,7 +228,7 @@
 
         var self = this;
         _timeout = setTimeout(function() {
-          _resize.call(self, ev);
+          _resize.call(self, ev, wasInited);
         }, 100);
       };
     })(),
@@ -235,6 +243,35 @@
       document.body.scrollTop = 0;
       document.body.scrollLeft = 0;
       return true;
+    },
+
+    hashchange: function(ev) {
+      var hash = window.location.hash.substr(1);
+      var spl = hash.split(/^([\w\.\-_]+)\:(.*)/);
+
+      function getArgs(q) {
+        var args = {};
+        q.split('&').forEach(function(a) {
+          var b = a.split('=');
+          var k = decodeURIComponent(b[0]);
+          args[k] = decodeURIComponent(b[1] || '');
+        });
+        return args;
+      }
+
+      if ( spl.length === 4 ) {
+        var root = spl[1];
+        var args = getArgs(spl[2]);
+
+        if ( root ) {
+          OSjs.API.getProcess(root).forEach(function(p) {
+            p._onMessage('hashchange', {
+              hash: hash,
+              args: args
+            }, {source: null});
+          });
+        }
+      }
     }
   };
 
@@ -255,28 +292,19 @@
   function initLayout() {
     console.debug('initLayout()');
 
-    var append = OSjs.API.getConfig('VersionAppend');
+    if ( OSjs.API.getConfig('Watermark.enabled') ) {
+      var ver = OSjs.API.getConfig('Version', 'unknown version');
+      var html = OSjs.API.getConfig('Watermark.lines') || [];
 
-    var ver = OSjs.API.getConfig('Version', 'unknown version');
-    var cop = 'Copyright © 2011-2016 ';
-    var lnk = document.createElement('a');
-    lnk.href = 'mailto:andersevenrud@gmail.com';
-    lnk.appendChild(document.createTextNode('Anders Evenrud'));
+      var el = document.createElement('div');
+      el.id = 'DebugNotice';
+      el.setAttribute('aria-hidden', 'true');
+      el.innerHTML = html.join('<br />').replace(/%VERSION%/, ver);
 
-    var el = document.createElement('div');
-    el.id = 'DebugNotice';
-    el.appendChild(document.createTextNode(OSjs.Utils.format('OS.js {0}', ver)));
-    el.appendChild(document.createElement('br'));
-    el.appendChild(document.createTextNode(cop));
-    el.appendChild(lnk);
-    if ( append ) {
-      el.appendChild(document.createElement('br'));
-      el.innerHTML += append;
+      document.body.appendChild(el);
     }
 
     document.getElementById('LoadingScreen').style.display = 'none';
-
-    document.body.appendChild(el);
   }
 
   /**
@@ -286,21 +314,28 @@
     console.debug('initHandler()');
 
     handler = new OSjs.Core.Handler();
-    handler.init(function() {
-      if ( inited ) {
+
+    function _done(error) {
+      if ( error ) {
+        onError(error);
         return;
       }
-      inited = true;
 
-      handler.boot(function(result, error) {
-        if ( error ) {
-          onError(error);
+      if ( !inited ) {
+        if ( !handler.loggedIn ) {
+          if ( confirm(OSjs.API._('ERR_NO_SESSION')) ) {
+            handler.init(_done);
+          }
           return;
         }
+      }
 
-        callback();
-      });
-    });
+      inited = true;
+
+      callback();
+    }
+
+    handler.init(_done);
   }
 
   /**
@@ -311,10 +346,12 @@
 
     document.body.addEventListener('contextmenu', events.body_contextmenu, false);
     document.body.addEventListener('mousedown', events.body_mousedown, false);
+    document.body.addEventListener('click', events.body_click, false);
     document.addEventListener('keydown', events.keydown, true);
     document.addEventListener('keypress', events.keypress, true);
     document.addEventListener('keyup', events.keyup, true);
     document.addEventListener('mousedown', events.mousedown, false);
+    window.addEventListener('hashchange', events.hashchange, false);
     window.addEventListener('resize', events.resize, false);
     window.addEventListener('scroll', events.scroll, false);
     window.addEventListener('fullscreenchange', events.fullscreen, false);
@@ -344,13 +381,26 @@
    */
   function initPreload(config, callback) {
     console.debug('initPreload()');
+    var list = [];
 
-    var preloads = config.Preloads;
-    preloads.forEach(function(val, index) {
-      val.src = OSjs.Utils.checkdir(val.src);
-    });
+    function flatten(a) {
+      a.forEach(function(i) {
+        if ( i instanceof Array ) {
+          flatten(i);
+        } else {
+          if ( typeof i === 'string' ) {
+            i = OSjs.Utils.checkdir(i);
+          } else {
+            i.src = OSjs.Utils.checkdir(i.src);
+          }
+          list.push(i);
+        }
+      });
+    }
 
-    OSjs.Utils.preload(preloads, function(total, failed) {
+    flatten(config.Preloads);
+
+    OSjs.Utils.preload(list, function(total, failed) {
       if ( failed.length ) {
         console.warn('doInitialize()', 'some preloads failed to load:', failed);
       }
@@ -358,6 +408,30 @@
       setTimeout(function() {
         callback();
       }, 0);
+    });
+  }
+
+  /**
+   * Loads all extensions
+   */
+  function initExtensions(config, callback) {
+    var exts = Object.keys(OSjs.Extensions);
+    var manifest =  OSjs.Core.getMetadata();
+
+    console.group('initExtensions()', exts);
+    OSjs.Utils.asyncs(exts, function(entry, idx, next) {
+      try {
+        var m = manifest[entry];
+        OSjs.Extensions[entry].init(m, function() {
+          next();
+        });
+      } catch ( e ) {
+        console.warn('Extension init failed', e.stack, e);
+        next();
+      }
+    }, function() {
+      console.groupEnd();
+      callback();
     });
   }
 
@@ -379,15 +453,33 @@
   }
 
   /**
+   * Initializes the PackageManager
+   */
+  function initPackageManager(cfg, callback) {
+    OSjs.Core.getPackageManager().load(function(result, error) {
+      callback(error, result);
+    });
+  }
+
+  /**
    * Initalizes the VFS
    */
   function initVFS(config, callback) {
     console.debug('initVFS()');
-    if ( OSjs.VFS.registerMounts ) {
-      OSjs.VFS.registerMounts();
+    if ( OSjs.VFS.registerMountpoints ) {
+      OSjs.VFS.registerMountpoints();
     }
 
     callback();
+  }
+
+  /**
+   * Initializes the Search Engine
+   */
+  function initSearch(config, callback) {
+    console.debug('initSearch()');
+
+    OSjs.Core.getSearchEngine().init(callback);
   }
 
   /**
@@ -415,35 +507,96 @@
     OSjs.API.playSound('service-login');
 
     var wm = OSjs.Core.getWindowManager();
+    var list = [];
 
-    function autostart(cb) {
-      var start = [];
+    // In this case we merge the Autostart and the previous session together.
+    // This ensures that items with autostart are loaded with correct
+    // session data on restore. This is much better than relying on the internal
+    // event/message system which does not trigger until after everything is loaded...
+    // this does everything beforehand! :)
+    //
+    try {
+      list = config.AutoStart;
+    } catch ( e ) {
+      console.warn('initSession()->autostart()', 'exception', e, e.stack);
+    }
 
-      try {
-        start = config.AutoStart;
-      } catch ( e ) {
-        console.warn('initSession()->autostart()', 'exception', e, e.stack);
+    var checkMap = {};
+    var skipMap = [];
+    list.forEach(function(iter, idx) {
+      if ( typeof iter === 'string' ) {
+        iter = list[idx] = {name: iter};
+      }
+      if ( skipMap.indexOf(iter.name) === -1 ) {
+        if ( !checkMap[iter.name] ) {
+          checkMap[iter.name] = idx;
+          skipMap.push(iter.name);
+        }
+      }
+    });
+
+    handler.getLastSession(function(err, adds) {
+      if ( !err ) {
+        adds.forEach(function(iter) {
+          if ( typeof checkMap[iter.name] === 'undefined' ) {
+            list.push(iter);
+          } else {
+            if ( iter.args ) {
+              var refid = checkMap[iter.name];
+              var ref = list[refid];
+              if ( !ref.args ) {
+                ref.args = {};
+              }
+              ref.args = OSjs.Utils.mergeObject(ref.args, iter.args);
+            }
+          }
+        });
       }
 
-      console.info('initSession()->autostart()', start);
-      OSjs.API.launchList(start, null, null, cb);
-    }
+      console.info('initSession()->autostart()', list);
 
-    function session() {
-      handler.loadSession(function() {
-        setTimeout(function() {
-          events.resize();
-        }, 500);
-
-        callback();
-
-        wm.onSessionLoaded();
-      });
-    }
-
-    autostart(function() {
-      session();
+      OSjs.API.launchList(list, null, null, callback);
     });
+  }
+
+  /**
+   * Client-side unit-testing
+   */
+  function initTestEnvironment(config, callback) {
+    OSjs.Utils.preload([
+      '/vendor/mocha/mocha.js',
+      '/vendor/mocha/mocha.css',
+      '/vendor/chai/chai.js'
+    ], function() {
+      // Add basic layout
+      var h1 = document.createElement('h1');
+      h1.style.margin = '20px';
+      h1.appendChild(document.createTextNode('OS.js Mocha Client Test Suite'));
+      document.body.appendChild(h1);
+
+      var el = document.createElement('div');
+      el.id = 'mocha';
+      document.body.appendChild(el);
+
+      // Reset certain styles
+      document.body.style.background = '#fff';
+      document.body.style.overflow = 'auto';
+
+      // Init mocha interfaces
+      window.mocha.ui('bdd');
+      window.mocha.reporter('html');
+
+      // Create mock Window Manager
+      (new OSjs.Core.WindowManager('MochaWM', null, {}, {}, {})).init();
+
+      // Load default themes
+      OSjs.Utils.$createCSS(OSjs.API.getThemeCSS('default'));
+
+      // Load and run tests
+      OSjs.Utils.preload(['/client/test/test.js'], callback);
+    });
+
+    return true;
   }
 
   /**
@@ -453,41 +606,79 @@
     console.group('init()');
 
     var config = OSjs.Core.getConfig();
+    var splash = document.getElementById('LoadingScreen');
+    var loading = OSjs.API.createSplash('OS.js', null, null, splash);
+    var freeze = ['API', 'Core', 'Dialogs', 'Extensions', 'GUI', 'Helpers', 'Locales', 'Utils', 'VFS'];
+    var queue = [
+      initPreload,
+      initHandler,
+      initVFS,
+      initPackageManager,
+      initExtensions,
+      initSettingsManager,
+      initSearch,
+      function(cfg, cb) {
+        return OSjs.GUI.DialogScheme.init(cb);
+      }
+    ];
+
+    function _inited() {
+      loading = loading.destroy();
+      splash = OSjs.Utils.$remove(splash);
+
+      var wm = OSjs.Core.getWindowManager();
+      wm._fullyLoaded = true;
+
+      OSjs.API.triggerHook('onWMInited');
+
+      console.groupEnd();
+    }
+
+    function _done() {
+      OSjs.API.triggerHook('onInited');
+
+      loading.update(queue.length - 1, queue.length + 1);
+
+      freeze.forEach(function(f) {
+        if ( typeof OSjs[f] === 'object' ) {
+          Object.freeze(OSjs[f]);
+        }
+      });
+
+      if ( config.DEVMODE || config.MOCHAMODE ) {
+        _inited();
+      }
+
+      if ( config.MOCHAMODE ) {
+        window.mocha.run();
+      } else {
+        initWindowManager(config, function() {
+          initEvents();
+
+          _inited();
+
+          initSession(config, function() {
+            OSjs.API.triggerHook('onSessionLoaded');
+          });
+        });
+      }
+    }
 
     initLayout();
 
-    initPreload(config, function() {
-      OSjs.API.triggerHook('onInitialize');
+    if ( config.MOCHAMODE ) {
+      queue.push(initTestEnvironment);
+    }
 
-      initHandler(config, function() {
+    OSjs.Utils.asyncs(queue, function(entry, index, next) {
+      if ( index < 1 ) {
+        OSjs.API.triggerHook('onInitialize');
+      }
 
-        initSettingsManager(config, function() {
+      loading.update(index + 1, queue.length + 1);
 
-          initVFS(config, function() {
-            OSjs.API.triggerHook('onInited');
-
-            initWindowManager(config, function() {
-              OSjs.API.triggerHook('onWMInited');
-
-              OSjs.Utils.$remove(document.getElementById('LoadingScreen'));
-
-              initEvents();
-              var wm = OSjs.Core.getWindowManager();
-              wm._fullyLoaded = true;
-
-              console.groupEnd();
-
-              initSession(config, function() {
-                OSjs.API.triggerHook('onSessionLoaded');
-              });
-            }); // wm
-          }); // vfs
-
-        }); // settings
-
-      }); // preload
-
-    }); // handler
+      entry(config, next);
+    }, _done);
   }
 
   /////////////////////////////////////////////////////////////////////////////
@@ -497,7 +688,8 @@
   /**
    * Shuts down OS.js
    *
-   * @api OSjs.API.shutdown()
+   * @function shutdown
+   * @memberof OSjs.API
    */
   OSjs.API.shutdown = function() {
     if ( !inited || !loaded ) {
@@ -508,10 +700,12 @@
 
     document.body.removeEventListener('contextmenu', events.body_contextmenu, false);
     document.body.removeEventListener('mousedown', events.body_mousedown, false);
+    document.body.removeEventListener('click', events.body_click, false);
     document.removeEventListener('keydown', events.keydown, true);
     document.removeEventListener('keypress', events.keypress, true);
     document.removeEventListener('keyup', events.keyup, true);
     document.removeEventListener('mousedown', events.mousedown, false);
+    window.removeEventListener('hashchange', events.hashchange, false);
     window.removeEventListener('resize', events.resize, false);
     window.removeEventListener('scroll', events.scroll, false);
     window.removeEventListener('message', events.message, false);
@@ -521,6 +715,7 @@
 
     OSjs.API.blurMenu();
     OSjs.API.killAll();
+    OSjs.GUI.DialogScheme.destroy();
 
     var ring = OSjs.API.getServiceNotificationIcon();
     if ( ring ) {
@@ -533,6 +728,8 @@
       handler = null;
     }
 
+    OSjs.API.triggerHook('onShutdown');
+
     console.warn('OS.js was shut down!');
 
     if ( OSjs.API.getConfig('Connection.Type') === 'nw' ) {
@@ -543,6 +740,10 @@
           win.close();
         }, 500);
       } catch ( e ) {
+      }
+    } else {
+      if ( OSjs.API.getConfig('ReloadOnShutdown') === true ) {
+        window.location.reload();
       }
     }
   };
@@ -558,10 +759,11 @@
    *
    * You should use 'OSjs.API.getConfig()' to get a setting
    *
-   * @return  Object
+   * @function getConfig
+   * @memberof OSjs.Core
+   * @see OSjs.API.getConfig
    *
-   * @see     OSjs.API.getConfig()
-   * @api     OSjs.Core.getConfig()
+   * @return  {Object}
    */
   OSjs.Core.getConfig = OSjs.Core.getConfig || function() {
     return {};
@@ -572,9 +774,10 @@
    *
    * THIS IS JUST A PLACEHOLDER. 'packages.js' SHOULD HAVE THIS!
    *
-   * @return  Object
+   * @function getMetadata
+   * @memberof OSjs.Core
    *
-   * @api     OSjs.Core.getMetadata()
+   * @return  {Metadata[]}
    */
   OSjs.Core.getMetadata = OSjs.Core.getMetadata || function() {
     return {};

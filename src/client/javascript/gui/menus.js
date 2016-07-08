@@ -36,10 +36,13 @@
   // HELPERS
   /////////////////////////////////////////////////////////////////////////////
 
-  function blurMenu() {
-    if ( !lastMenu ) { return; }
-    lastMenu();
+  function blurMenu(ev) {
+    if ( lastMenu ) {
+      lastMenu(ev);
+    }
     lastMenu = null;
+
+    API.triggerHook('onBlurMenu');
   }
 
   function bindSelectionEvent(child, span, idx, expand, dispatcher) {
@@ -49,24 +52,76 @@
     var hasInput = child.querySelector('input');
 
     Utils.$bind(child, 'mousedown', function(ev) {
+      ev.stopPropagation();
+    });
+
+    Utils.$bind(child, 'click', function(ev, pos, touch) {
       var target = ev.target || ev.srcElement;
       var isExpander = (target.tagName.toLowerCase() === 'gui-menu-entry' && Utils.$hasClass(target, 'gui-menu-expand'));
       var stopProp = hasInput || isExpander;
-
-      if ( hasInput ) {
-        ev.preventDefault();
-        hasInput.dispatchEvent(new MouseEvent('click'));
-      }
-      dispatcher.dispatchEvent(new CustomEvent('_select', {detail: {index: idx, id: id}}));
 
       if ( stopProp ) {
         ev.stopPropagation();
       }
 
-      if ( !isExpander ) {
-        blurMenu();
+      if ( expand ) {
+        if ( touch ) {
+          child.parentNode.children.forEach(function(c) {
+            Utils.$removeClass(c, 'gui-hover');
+          });
+          Utils.$addClass(child, 'gui-hover');
+        }
+      } else {
+        if ( hasInput ) {
+          ev.preventDefault();
+          hasInput.dispatchEvent(new MouseEvent('click'));
+        }
+        dispatcher.dispatchEvent(new CustomEvent('_select', {detail: {index: idx, id: id}}));
       }
-    }, false);
+
+      if ( !isExpander ) {
+        blurMenu(ev);
+      }
+    });
+  }
+
+  /**
+   * This function makes menus pop out to the left instead of right
+   *
+   * Does not work for gui-menu-bar atm
+   */
+  function clampSubmenuPositions(r) {
+    function _clamp(rm) {
+      rm.querySelectorAll('gui-menu-entry').forEach(function(srm) {
+        var sm = srm.querySelector('gui-menu');
+        if ( sm ) {
+          sm.style.left = String(-parseInt(sm.offsetWidth, 10)) + 'px';
+          _clamp(sm);
+        }
+      });
+    }
+
+    var pos = Utils.$position(r);
+    if ( (window.innerWidth - pos.right) < r.offsetWidth ) {
+      Utils.$addClass(r, 'gui-overflowing');
+      _clamp(r);
+    }
+
+    // this class is used in caclulations (DOM needs to be visible for that)
+    Utils.$addClass(r, 'gui-showing');
+  }
+
+  function runChildren(pel, level, winRef, cb) {
+    level = level || 0;
+    cb = cb || function() {};
+
+    (pel.children || []).forEach(function(child, i) {
+      if ( child && child.tagName.toLowerCase() === 'gui-menu-entry') {
+        GUI.Elements['gui-menu-entry'].build(child, null, winRef);
+
+        cb(child, level);
+      }
+    });
   }
 
   /////////////////////////////////////////////////////////////////////////////
@@ -74,18 +129,113 @@
   /////////////////////////////////////////////////////////////////////////////
 
   /**
+   * Element: 'gui-menu-entry'
+   *
+   * An entry for a menu.
+   *
+   * <pre><code>
+   *   Events:
+   *    select        When an entry was selected (click) => fn(ev)
+   * <pre><code>
+   *
+   * @constructs OSjs.GUI.Element
+   * @memberof OSjs.GUI.Elements
+   * @var gui-menu-entry
+   */
+  GUI.Elements['gui-menu-entry'] = (function() {
+    function _checkExpand(child) {
+      var sub = child.querySelector('gui-menu');
+      if ( sub ) {
+        Utils.$addClass(child, 'gui-menu-expand');
+        child.setAttribute('aria-haspopup', 'true');
+        return true;
+      } else {
+        child.setAttribute('aria-haspopup', 'false');
+      }
+
+      return false;
+    }
+
+    function createTyped(child, par) {
+      var type = child.getAttribute('data-type');
+      var value = child.getAttribute('data-checked') === 'true';
+      var input = null;
+      if ( type ) {
+        var group = child.getAttribute('data-group');
+        input = document.createElement('input');
+        input.type = type;
+        input.name = group ? group + '[]' : '';
+        if ( value ) {
+          input.setAttribute('checked', 'checked');
+        }
+        /*
+        input.addEventListener('click', function(ev) {
+          blurMenu();
+        }, true);
+        */
+
+        par.setAttribute('role', 'menuitem' + type);
+        par.appendChild(input);
+      }
+    }
+
+    return {
+      bind: function(el, evName, callback, params) {
+        if ( evName === 'select' ) {
+          evName = '_select';
+        }
+
+        var target = el.querySelector('gui-menu-entry > label');
+        Utils.$bind(target, evName, callback.bind(new GUI.Element(el)), params);
+      },
+      build: function(child, arg, winRef) {
+        if ( arguments.length < 3 ) {
+          return;
+        }
+        child.setAttribute('role', 'menuitem' + (child.getAttribute('data-type') || ''));
+
+        var label = GUI.Helpers.getLabel(child);
+        var icon = GUI.Helpers.getIcon(child, winRef);
+        child.setAttribute('aria-label', label);
+
+        var span = document.createElement('label');
+        if ( icon ) {
+          child.style.backgroundImage = 'url(' + icon + ')';
+          Utils.$addClass(span, 'gui-has-image');
+        }
+        child.appendChild(span);
+
+        createTyped(child, span);
+
+        if ( child.getAttribute('data-labelhtml') === 'true' ) {
+          span.innerHTML = label;
+        } else {
+          span.appendChild(document.createTextNode(label));
+        }
+
+        var i = Utils.$index(child);
+        var expand = _checkExpand(child);
+        bindSelectionEvent(child, span, i, expand, span);
+      }
+    };
+  })();
+
+  /**
    * Element: 'gui-menu'
    *
    * A normal menu (also contextmenu)
    *
-   * Events:
-   *  select        When an entry was selected (click) => fn(ev)
+   * <pre><code>
+   *   Events:
+   *    select        When an entry was selected (click) => fn(ev)
    *
-   * Setters:
-   *  checked       Set checkbox/option checked value
+   *   Setters:
+   *    checked       Set checkbox/option checked value
+   * </code></pre>
    *
-   * @api OSjs.GUI.Elements.gui-menu
-   * @class
+   * @constructs OSjs.GUI.Element
+   * @memberof OSjs.GUI.Elements
+   * @var gui-menu
    */
   GUI.Elements['gui-menu'] = {
     bind: function(el, evName, callback, params) {
@@ -108,7 +258,7 @@
         var i = Utils.$index(label.parentNode);
         bindSelectionEvent(label.parentNode, label, i, expand, el.querySelector('label'));
       });
-      OSjs.API.createMenu(null, ev, newNode);
+      OSjs.GUI.Helpers.createMenu(null, ev, newNode);
     },
     set: function(el, param, value, arg) {
       if ( param === 'checked' ) {
@@ -128,70 +278,16 @@
       return false;
     },
     build: function(el, customMenu, winRef) {
+      el.setAttribute('role', 'menu');
 
-      function createTyped(child, par) {
-        var type = child.getAttribute('data-type');
-        var value = child.getAttribute('data-checked') === 'true';
-        var input = null;
-        if ( type ) {
-          var group = child.getAttribute('data-group');
-          input = document.createElement('input');
-          input.type = type;
-          input.name = group ? group + '[]' : '';
-          if ( value ) {
-            input.setAttribute('checked', 'checked');
-          }
-          input.addEventListener('click', function(ev) {
-            blurMenu();
-          }, true);
-          par.appendChild(input);
-        }
-      }
-
-      function runChildren(pel, level) {
-        var children = pel.children;
-        var child, span, label, expand, icon;
-
-        for ( var i = 0; i < children.length; i++ ) {
-          child = children[i];
-          expand = false;
-
-          if ( child && child.tagName.toLowerCase() === 'gui-menu-entry') {
-            if ( child.children && child.children.length ) {
-              Utils.$addClass(child, 'gui-menu-expand');
-              expand = true;
-            }
-            label = GUI.Helpers.getLabel(child);
-            icon = GUI.Helpers.getIcon(child, winRef);
-
-            span = document.createElement('label');
-            if ( icon ) {
-              child.style.backgroundImage = 'url(' + icon + ')';
-              Utils.$addClass(span, 'gui-has-image');
-            }
-            child.appendChild(span);
-
-            createTyped(child, span);
-
-            if ( child.getAttribute('data-labelhtml') === 'true' ) {
-              span.innerHTML = label;
-            } else {
-              span.appendChild(document.createTextNode(label));
-            }
-
-            bindSelectionEvent(child, span, i, expand);
-
-            if ( customMenu ) {
-              var sub = child.querySelector('gui-menu');
-              if ( sub ) {
-                runChildren(sub, level + 1);
-              }
-            }
+      runChildren(el, 0, winRef, function(child, level) {
+        if ( customMenu ) {
+          var sub = child.querySelector('gui-menu');
+          if ( sub ) {
+            runChildren(sub, level + 1, winRef);
           }
         }
-      }
-
-      runChildren(el, 0);
+      });
     }
   };
 
@@ -200,11 +296,13 @@
    *
    * A menubar with sub-menus
    *
-   * Events:
-   *  select        When an entry was selected (click) => fn(ev)
+   * <pre><code>
+   *   event     select               When an entry was selected (click) => fn(ev)
+   * </code></pre>
    *
-   * @api OSjs.GUI.Elements.gui-menu-bar
-   * @class
+   * @constructs OSjs.GUI.Element
+   * @memberof OSjs.GUI.Elements
+   * @var gui-menu-bar
    */
   GUI.Elements['gui-menu-bar'] = {
     bind: function(el, evName, callback, params) {
@@ -216,6 +314,23 @@
       });
     },
     build: function(el) {
+      el.setAttribute('role', 'menubar');
+
+      function updateChildren(sm, level) {
+        if ( sm && sm.children ) {
+          var children = sm.children;
+          var child;
+          for ( var i = 0; i < children.length; i++ ) {
+            child = children[i];
+            if ( child.tagName === 'GUI-MENU-ENTRY' ) {
+
+              child.setAttribute('aria-haspopup', String(!!child.firstChild));
+              updateChildren(child.firstChild, level + 1);
+            }
+          }
+        }
+      }
+
       el.querySelectorAll('gui-menu-bar-entry').forEach(function(mel, idx) {
         var label = GUI.Helpers.getLabel(mel);
         var id = mel.getAttribute('data-id');
@@ -223,14 +338,36 @@
         var span = document.createElement('span');
         span.appendChild(document.createTextNode(label));
 
+        mel.setAttribute('role', 'menuitem');
+
         mel.insertBefore(span, mel.firstChild);
 
         var submenu = mel.querySelector('gui-menu');
+
+        clampSubmenuPositions(submenu);
+
+        mel.setAttribute('aria-haspopup', String(!!submenu));
+        updateChildren(submenu, 2);
+
+        Utils.$bind(mel, 'mousedown', function(ev) {
+          ev.preventDefault();
+          ev.stopPropagation();
+        });
         Utils.$bind(mel, 'click', function(ev) {
           blurMenu();
 
+          ev.preventDefault();
+          ev.stopPropagation();
+
+          mel.querySelectorAll('gui-menu-entry').forEach(function(c) {
+            Utils.$removeClass(c, 'gui-hover');
+          });
+
           if ( submenu ) {
-            lastMenu = function() {
+            lastMenu = function(ev) {
+              if ( ev ) {
+                ev.stopPropagation();
+              }
               Utils.$removeClass(mel, 'gui-active');
             };
           }
@@ -255,33 +392,32 @@
   /**
    * Blur the currently open menu (aka hiding)
    *
-   * @return void
-   * @api OSjs.API.blurMenu()
+   * @function blurMenu
+   * @memberof OSjs.GUI.Helpers
    */
-  OSjs.API.blurMenu = blurMenu;
+  OSjs.GUI.Helpers.blurMenu = blurMenu;
 
   /**
    * Create and show a new menu
    *
-   * Format:
-   * [
-   *  {
-   *    title: "Title",
-   *    icon: "Icon",
-   *    onClick: function() {}, // Callback
-   *    items: [] // Recurse :)
-   *  }
-   *  ...
-   * ]
+   * @example
+   * createMenu([
+   *    {
+   *      title: "Title",
+   *      icon: "Icon",
+   *      onClick: function() {}, // Callback
+   *      items: [] // Recurse :)
+   *    }
+   * ])
    *
-   * @param   Array       items             Array of items
-   * @param   Event       ev                DOM Event or dict with x/y
-   * @param   Mixed       customInstance    Show a custom created menu
+   * @param   {Array}       items             Array of items
+   * @param   {Event}       ev                DOM Event or dict with x/y
+   * @param   {Mixed}       [customInstance]  Show a custom created menu
    *
-   * @return void
-   * @api OSjs.API.createMenu()
+   * @function createMenu
+   * @memberof OSjs.GUI.Helpers
    */
-  OSjs.API.createMenu = function(items, ev, customInstance) {
+  OSjs.GUI.Helpers.createMenu = function(items, ev, customInstance) {
     items = items || [];
     blurMenu();
 
@@ -297,10 +433,9 @@
           entry.appendChild(nroot);
         }
         if ( iter.onClick ) {
-          Utils.$bind(entry, 'mousedown', function(ev) {
-            ev.stopPropagation();
+          Utils.$bind(entry, 'click', function(ev) {
             iter.onClick.apply(this, arguments);
-          }, false);
+          }, true);
         }
         par.appendChild(entry);
       });
@@ -334,7 +469,7 @@
     }
 
     var wm = OSjs.Core.getWindowManager();
-    var space = wm.getWindowSpace();
+    var space = wm.getWindowSpace(true);
     var pos = getPosition();
 
     Utils.$addClass(root, 'gui-root-menu');
@@ -347,12 +482,14 @@
       var pos = Utils.$position(root);
       if ( pos.right > space.width ) {
         var newLeft = Math.round(space.width - pos.width);
-        root.style.left = newLeft + 'px';
+        root.style.left = Math.max(0, newLeft) + 'px';
       }
       if ( pos.bottom > space.height ) {
         var newTop = Math.round(space.height - pos.height);
-        root.style.top = newTop + 'px';
+        root.style.top = Math.max(0, newTop) + 'px';
       }
+
+      clampSubmenuPositions(root);
     }, 1);
 
     lastMenu = function() {

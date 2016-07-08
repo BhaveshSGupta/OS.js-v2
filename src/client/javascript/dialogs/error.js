@@ -33,17 +33,19 @@
   /**
    * An 'Error' dialog
    *
-   * @param   args      Object        An object with arguments
-   * @param   callback  Function      Callback when done => fn(ev, button, result)
+   * @example
    *
-   * @option    args    title       String      Dialog title
-   * @option    args    message     String      Dialog message
-   * @option    args    error       String      Error message
-   * @option    args    exception   Object      (Optional) Exception object
+   * OSjs.API.createDialog('Error', {}, fn);
    *
-   * @extends DialogWindow
-   * @class ErrorDialog
-   * @api OSjs.Dialogs.Error
+   * @param  {Object}          args              An object with arguments
+   * @param  {String}          args.title        Dialog title
+   * @param  {String}          args.message      Dialog message
+   * @param  {String}          args.error        Error message
+   * @param  {Error}           [args.exception]  Exception
+   * @param  {CallbackDialog}  callback          Callback when done
+   *
+   * @constructor Error
+   * @memberof OSjs.Dialogs
    */
   function ErrorDialog(args, callback) {
     args = Utils.argumentDefaults(args, {});
@@ -83,12 +85,13 @@
   ErrorDialog.constructor = DialogWindow;
 
   ErrorDialog.prototype.init = function() {
-    var root = DialogWindow.prototype.init.apply(this, arguments);
     var self = this;
 
-    var msg = Utils.$escape(this.args.message || '').replace(/\*\*(\w+)\*\*/, '<span>$1</span>');
+    var root = DialogWindow.prototype.init.apply(this, arguments);
+    root.setAttribute('role', 'alertdialog');
 
-    this.scheme.find(this, 'Message').set('value', msg, true);
+    var msg = DialogWindow.parseMessage(this.args.message);
+    this.scheme.find(this, 'Message').empty().append(msg);
     this.scheme.find(this, 'Summary').set('value', this.args.error);
     this.scheme.find(this, 'Trace').set('value', this.traceMessage);
     if ( !this.traceMessage ) {
@@ -106,7 +109,7 @@
         if ( self.traceMessage ) {
           body.push('\n```\n' + self.traceMessage + '\n```');
         }
-        window.open('//github.com/andersevenrud/OS.js-v2/issues/new?title=' + title + '&body=' + encodeURIComponent(body.join('\n')));
+        window.open('//github.com/os-js/OS.js/issues/new?title=' + title + '&body=' + encodeURIComponent(body.join('\n')));
       });
     } else {
       this.scheme.find(this, 'ButtonBugReport').hide();
@@ -120,6 +123,6 @@
   /////////////////////////////////////////////////////////////////////////////
 
   OSjs.Dialogs = OSjs.Dialogs || {};
-  OSjs.Dialogs.Error = ErrorDialog;
+  OSjs.Dialogs.Error = Object.seal(ErrorDialog);
 
 })(OSjs.API, OSjs.Utils, OSjs.Core.DialogWindow);

@@ -31,8 +31,6 @@
   // jscs:disable validateQuoteMarks
   'use strict';
 
-  OSjs.Locales = OSjs.Locales || {};
-
   OSjs.Locales.no_NO = {
     'ERR_FILE_OPEN'             : 'Feil ved åpning av fil',
     'ERR_WM_NOT_RUNNING'        : 'Window Manager kjører ikke',
@@ -317,6 +315,8 @@
     'LBL_ORDERED_LIST'  : 'Ordnet liste',
     'LBL_BACKGROUND_IMAGE' : 'Bakgrunnsbilde',
     'LBL_BACKGROUND_COLOR' : 'Bakgrunnsfarge',
-    'LBL_UNORDERED_LIST'   : 'Uordnet Liste'
+    'LBL_UNORDERED_LIST'   : 'Uordnet Liste',
+    'LBL_SHOW_SIDEBAR' : 'Vis Sidebar',
+    'LBL_SEARCH': 'Søk'
   };
 })();

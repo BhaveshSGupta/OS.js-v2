@@ -30,8 +30,13 @@
 (function(API, Utils, VFS, GUI) {
   'use strict';
 
-  GUI = OSjs.GUI || {};
-  GUI.Elements = OSjs.GUI.Elements || {};
+  /////////////////////////////////////////////////////////////////////////////
+  // ABSTRACTION HELPERS
+  /////////////////////////////////////////////////////////////////////////////
+
+  var _classMap = { // Defaults to (foo-bar)-entry
+    'gui-list-view': 'gui-list-view-row'
+  };
 
   /////////////////////////////////////////////////////////////////////////////
   // HELPERS
@@ -68,16 +73,15 @@
   }
 
   function handleKeyPress(el, ev) {
-    var classMap = {
-      'gui-list-view': 'gui-list-view-row',
-      'gui-tree-view': 'gui-tree-view-entry',
-      'gui-icon-view': 'gui-icon-view-entry'
-    };
-
     var map = {};
     var key = ev.keyCode;
     var type = el.tagName.toLowerCase();
-    var className = classMap[type];
+
+    var className = _classMap[type];
+    if ( !className ) {
+      className = type + '-entry';
+    }
+
     var root = el.querySelector(type + '-body');
     var entries = root.querySelectorAll(className);
     var count = entries.length;
@@ -88,6 +92,24 @@
       el.dispatchEvent(new CustomEvent('_activate', {detail: {entries: getSelected(el)}}));
       return;
     }
+
+    map[Utils.Keys.C] = function(ev) {
+      if ( ev.ctrlKey ) {
+        var selected = getSelected(el);
+        if ( selected && selected.length ) {
+          var data = [];
+
+          selected.forEach(function(s) {
+            if ( s && s.data ) {
+              data.push(new VFS.File(s.data.path, s.data.mime));
+            }
+          });
+
+          API.setClipboard(data);
+        }
+        console.warn();
+      }
+    };
 
     var selected = el._selected.concat() || [];
     var first = selected.length ? selected[0] : 0;
@@ -161,19 +183,26 @@
     handleKey();
   }
 
+  function getValueParameter(r) {
+    var value = r.getAttribute('data-value');
+    try {
+      return JSON.parse(value);
+    } catch ( e ) {}
+
+    return value;
+  }
+
   function matchValueByKey(r, val, key, idx) {
-    if ( val || val === 0 ) {
-      var value = r.getAttribute('data-value');
-      if ( !key && (val === idx || val === value) ) {
-        return r;
-      } else {
-        try {
-          var json = JSON.parse(value);
-          if ( typeof json[key] === 'object' ? json[key] === val : String(json[key]) === String(val) ) {
-            return r;
-          }
-        } catch ( e ) {}
-      }
+    var value = r.getAttribute('data-value');
+    if ( !key && (val === idx || val === value) ) {
+      return r;
+    } else {
+      try {
+        var json = JSON.parse(value);
+        if ( typeof json[key] === 'object' ? json[key] === val : String(json[key]) === String(val) ) {
+          return r;
+        }
+      } catch ( e ) {}
     }
     return false;
   }
@@ -187,30 +216,26 @@
    *
    * This is an abstraction layer for Icon, Tree and List views.
    *
-   * Events:
-   *  select        When an entry was selected (click) => fn(ev)
-   *  activate      When an entry was activated (doubleclick) => fn(ev)
+   * See `ev.detail` for data on events (like on 'change').
    *
-   * Parameters:
-   *  multiple  boolean     Multiple selection (default=true)
+   * <pre><code>
+   *   getter    value     Mixed         The value/currently selected
+   *   getter    selected  Mixed         Alias of 'value'
+   *   getter    entry     Mixed         Gets an etnry by value, key
+   *   setter    value     Mixed         The value/currently selected
+   *   property  multiple  boolean       If multiple elements are selectable
+   *   event     select                  When entry was selected => fn(ev)
+   *   event     activate                When entry was activated => fn(ev)
+   *   action    add                     Add elements(s) => fn(entries)
+   *   action    patch                   Patch/Update elements => fn(entries)
+   *   action    remove                  Removes element => fn(arg)
+   *   action    clear                   Clear elements => fn()
+   * </code></pre>
    *
-   * Setters:
-   *  value         Sets the selected entry(es)
-   *  selected      Alias for 'value'
-   *
-   * Getters:
-   *  entry         Gets an entry by value, key
-   *  value         Gets the selected entry(es)
-   *  selected      Alias for 'value'
-   *
-   * Actions:
-   *  add(arg)      Adds en entry (or from array)
-   *  remove(arg)   Removes an entry
-   *  patch(arg)    Patch/Update entries from array
-   *  clear()
-   *
-   * @api OSjs.GUI.Elements._dataview
-   * @class
+   * @constructs OSjs.GUI.Element
+   * @memberof OSjs.GUI.Elements
+   * @var DataView
+   * @abstract
    */
   GUI.Elements._dataview = {
     clear: function(el, body) {
@@ -286,22 +311,24 @@
       return this;
     },
 
-    remove: function(el, args, className, target) {
+    remove: function(el, args, className, target, parentEl) {
       function remove(cel) {
         Utils.$remove(cel);
       }
+
+      parentEl = parentEl || el;
 
       if ( target ) {
         remove(target);
         return;
       }
       if ( typeof args[1] === 'undefined' && typeof args[0] === 'number' ) {
-        remove(el.querySelectorAll(className)[args[0]]);
+        remove(parentEl.querySelectorAll(className)[args[0]]);
       } else {
         var findId = args[0];
         var findKey = args[1] || 'id';
         var q = 'data-' + findKey + '="' + findId + '"';
-        el.querySelectorAll(className + '[' + q + ']').forEach(remove);
+        parentEl.querySelectorAll(className + '[' + q + ']').forEach(remove);
       }
 
       this.updateActiveSelection(el, className);
@@ -345,6 +372,7 @@
 
       function select(ev) {
         ev.stopPropagation();
+        API.blurMenu();
 
         var multipleSelect = el.getAttribute('data-multiple');
         multipleSelect = multipleSelect === null || multipleSelect === 'true';
@@ -355,6 +383,8 @@
 
       function activate(ev) {
         ev.stopPropagation();
+        API.blurMenu();
+
         el.dispatchEvent(new CustomEvent('_activate', {detail: {entries: getSelected(el)}}));
       }
 
@@ -379,7 +409,7 @@
           }
         }
 
-        API.createDraggable(row, {
+        GUI.Helpers.createDraggable(row, {
           type   : el.getAttribute('data-draggable-type') || row.getAttribute('data-draggable-type'),
           source : source,
           data   : value
@@ -430,15 +460,21 @@
       return selected;
     },
 
-    getEntry: function(el, entries, val, key) {
-      var result = null;
-      entries.forEach(function(r, idx) {
-        if ( matchValueByKey(r, val, key, idx) ) {
-          result = r;
-        }
-        return !!result;
+    getEntry: function(el, entries, val, key, asValue) {
+      if ( val ) {
+        var result = null;
+        entries.forEach(function(r, idx) {
+          if ( !result && matchValueByKey(r, val, key, idx) ) {
+            result = r;
+          }
+        });
+
+        return (asValue && result) ? getValueParameter(result) : result;
+      }
+
+      return !asValue ? entries : (entries || []).map(function(iter) {
+        return getValueParameter(iter);
       });
-      return result;
     },
 
     setSelected: function(el, body, entries, val, key, opts) {
@@ -463,6 +499,7 @@
           sel(r, idx);
         }
       });
+
       el._selected = select;
     },
 
@@ -474,6 +511,8 @@
 
       if ( !el.querySelector('textarea.gui-focus-element') && !el.getAttribute('no-selection') ) {
         var underlay = document.createElement('textarea');
+        underlay.setAttribute('aria-label', '');
+        underlay.setAttribute('aria-hidden', 'true');
         underlay.setAttribute('readonly', 'true');
         underlay.className = 'gui-focus-element';
         Utils.$bind(underlay, 'focus', function(ev) {
@@ -529,7 +568,7 @@
     },
 
     bind: function(el, evName, callback, params) {
-      if ( (['activate', 'select', 'expand', 'contextmenu', 'render']).indexOf(evName) !== -1 ) {
+      if ( (['activate', 'select', 'expand', 'contextmenu', 'render', 'drop']).indexOf(evName) !== -1 ) {
         evName = '_' + evName;
       }
       Utils.$bind(el, evName, callback.bind(new GUI.Element(el)), params);

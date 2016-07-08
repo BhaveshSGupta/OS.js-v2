@@ -55,6 +55,7 @@
 
     GUI.Elements._dataview.bindEntryEvents(el, cel, 'gui-icon-view-entry');
 
+    cel.setAttribute('role', 'listitem');
     cel.appendChild(dicon);
     cel.appendChild(dlabel);
   }
@@ -68,20 +69,22 @@
    *
    * A container for displaying icons with labels
    *
-   * Parameters:
-   *  icon-size     int         Icon size (default=16)
+   * For more properties and events etc, see 'dataview'
    *
-   * Format for add():
+   * <pre><code>
+   *   property  icon-size   integer       Icon size (default=16)
+   * </code></pre>
    *
-   * {
-   *    label: "Label",
-   *    icon: "Optional icon path",
-   *    value: "something or JSON or whatever"
-   * }
+   * @example
+   *   .add([{
+   *      label: "Label",
+   *      icon: "Optional icon path",
+   *      value: "something or JSON or whatever"
+   *   }])
    *
-   * @api OSjs.GUI.Elements.gui-icon-view
-   * @see OSjs.GUI.Elements._dataview
-   * @class
+   * @constructs OSjs.GUI.DataView
+   * @memberof OSjs.GUI.Elements
+   * @var gui-icon-view
    */
   GUI.Elements['gui-icon-view'] = {
     bind: GUI.Elements._dataview.bind,
@@ -106,13 +109,16 @@
         initEntry(el, cel);
       });
 
+      el.setAttribute('role', 'list');
+
       GUI.Elements._dataview.build(el, applyArgs);
     },
 
-    get: function(el, param, value, arg) {
+    get: function(el, param, value, arg, asValue) {
       if ( param === 'entry' ) {
         var body = el.querySelector('gui-icon-view-body');
-        return GUI.Elements._dataview.getEntry(el, body.querySelectorAll('gui-icon-view-entry'), value, arg);
+        var rows = body.querySelectorAll('gui-icon-view-entry');
+        return GUI.Elements._dataview.getEntry(el, rows, value, arg, asValue);
       }
       return GUI.Helpers.getProperty(el, param);
     },
